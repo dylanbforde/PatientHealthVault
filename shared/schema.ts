@@ -4,6 +4,7 @@ import { z } from "zod";
 
 // Define the emergency contact schema
 export const emergencyContactSchema = z.object({
+  username: z.string().min(1, "Username is required"),
   name: z.string().min(1, "Name is required"),
   relationship: z.string().min(1, "Relationship is required"),
   phone: z.string().min(1, "Phone number is required"),
@@ -27,6 +28,7 @@ export const users = pgTable("users", {
   bloodType: text("blood_type"),
   allergies: text("allergies").array(),
   publicKey: text("public_key"),
+  gpUsername: text("gp_username"),
   gpName: text("gp_name"),
   gpContact: text("gp_contact"),
 });
@@ -69,6 +71,7 @@ const healthRecordSchema = z.object({
 // Update the insert schema for users
 export const insertUserSchema = createInsertSchema(users).extend({
   emergencyContacts: emergencyContactSchema.array().default([]),
+  gpUsername: z.string().optional(),
   gpName: z.string().optional(),
   gpContact: z.string().optional(),
 });

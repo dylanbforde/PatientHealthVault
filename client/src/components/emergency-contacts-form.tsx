@@ -14,6 +14,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { type EmergencyContact, emergencyContactSchema } from "@shared/schema";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast";
 
 interface EmergencyContactsFormProps {
   contacts: EmergencyContact[];
@@ -26,10 +27,12 @@ export function EmergencyContactsForm({
   onSubmit,
   isSubmitting 
 }: EmergencyContactsFormProps) {
+  const { toast } = useToast();
   const form = useForm({
     resolver: zodResolver(emergencyContactSchema.array()),
     defaultValues: {
       contacts: contacts.length ? contacts : [{ 
+        username: "",
         name: "", 
         relationship: "", 
         phone: "", 
@@ -44,9 +47,25 @@ export function EmergencyContactsForm({
     control: form.control
   });
 
+  const handleSubmit = async (data: { contacts: EmergencyContact[] }) => {
+    try {
+      await onSubmit(data.contacts);
+      toast({
+        title: "Success",
+        description: "Emergency contacts updated successfully",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update contacts",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit((data) => onSubmit(data.contacts))} className="space-y-4">
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
         <div className="space-y-4">
           {fields.map((field, index) => (
             <Card key={field.id}>
@@ -55,12 +74,12 @@ export function EmergencyContactsForm({
                   <div className="grid grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
-                      name={`contacts.${index}.name`}
+                      name={`contacts.${index}.username`}
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Name</FormLabel>
+                          <FormLabel>Username</FormLabel>
                           <FormControl>
-                            <Input {...field} />
+                            <Input {...field} placeholder="Enter username" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -68,12 +87,12 @@ export function EmergencyContactsForm({
                     />
                     <FormField
                       control={form.control}
-                      name={`contacts.${index}.relationship`}
+                      name={`contacts.${index}.name`}
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Relationship</FormLabel>
+                          <FormLabel>Name</FormLabel>
                           <FormControl>
-                            <Input {...field} />
+                            <Input {...field} placeholder="Full name" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -83,12 +102,12 @@ export function EmergencyContactsForm({
                   <div className="grid grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
-                      name={`contacts.${index}.phone`}
+                      name={`contacts.${index}.relationship`}
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Phone</FormLabel>
+                          <FormLabel>Relationship</FormLabel>
                           <FormControl>
-                            <Input {...field} type="tel" />
+                            <Input {...field} placeholder="e.g. Spouse, Parent" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -96,18 +115,31 @@ export function EmergencyContactsForm({
                     />
                     <FormField
                       control={form.control}
-                      name={`contacts.${index}.email`}
+                      name={`contacts.${index}.phone`}
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Email (Optional)</FormLabel>
+                          <FormLabel>Phone</FormLabel>
                           <FormControl>
-                            <Input {...field} type="email" />
+                            <Input {...field} type="tel" placeholder="Phone number" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
                   </div>
+                  <FormField
+                    control={form.control}
+                    name={`contacts.${index}.email`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email (Optional)</FormLabel>
+                        <FormControl>
+                          <Input {...field} type="email" placeholder="Email address" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                   <div className="flex items-center justify-between">
                     <FormField
                       control={form.control}
@@ -145,6 +177,7 @@ export function EmergencyContactsForm({
             type="button"
             variant="outline"
             onClick={() => append({ 
+              username: "",
               name: "", 
               relationship: "", 
               phone: "", 

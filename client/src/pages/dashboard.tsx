@@ -371,6 +371,7 @@ export default function Dashboard() {
       insertUserSchema.pick({
         bloodType: true,
         allergies: true,
+        gpUsername: true, // Added gpUsername
         gpName: true,
         gpContact: true,
       })
@@ -378,6 +379,7 @@ export default function Dashboard() {
     defaultValues: {
       bloodType: user?.bloodType || "",
       allergies: user?.allergies || [],
+      gpUsername: user?.gpUsername || "", // Added gpUsername
       gpName: user?.gpName || "",
       gpContact: user?.gpContact || "",
     },
@@ -497,67 +499,78 @@ export default function Dashboard() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Emergency Contacts</CardTitle>
+              <CardTitle>Emergency Contacts & Healthcare Providers</CardTitle>
             </CardHeader>
-            <CardContent>
-              <EmergencyContactsForm
-                contacts={user?.emergencyContacts || []}
-                onSubmit={(contacts) => updateProfile.mutate({ emergencyContacts: contacts })}
-                isSubmitting={updateProfile.isPending}
-              />
-            </CardContent>
-          </Card>
+            <CardContent className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold mb-4">Emergency Contacts</h3>
+                <EmergencyContactsForm
+                  contacts={user?.emergencyContacts || []}
+                  onSubmit={(contacts) => updateProfile.mutate({ emergencyContacts: contacts })}
+                  isSubmitting={updateProfile.isPending}
+                />
+              </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>General Practitioner (GP) Information</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit((data) => updateProfile.mutate(data))} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="gpName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>GP Name</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="Enter your GP's name" value={field.value || ""} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="gpContact"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>GP Contact Information</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="GP's phone number or email" value={field.value || ""} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <div className="flex justify-end">
-                    <Button type="submit" disabled={updateProfile.isPending}>
-                      {updateProfile.isPending ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Saving...
-                        </>
-                      ) : (
-                        "Save Changes"
-                      )}
-                    </Button>
-                  </div>
-                </form>
-              </Form>
+              <div className="pt-6 border-t">
+                <h3 className="text-lg font-semibold mb-4">General Practitioner (GP)</h3>
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit((data) => updateProfile.mutate(data))} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="gpUsername"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>GP Username</FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder="Enter GP's username" value={field.value || ""} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="gpName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>GP Name</FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder="Enter GP's name" value={field.value || ""} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="gpContact"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>GP Contact Information</FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder="GP's phone number or email" value={field.value || ""} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                    <div className="flex justify-end">
+                      <Button type="submit" disabled={updateProfile.isPending}>
+                        {updateProfile.isPending ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          "Save GP Information"
+                        )}
+                      </Button>
+                    </div>
+                  </form>
+                </Form>
+              </div>
             </CardContent>
           </Card>
 
