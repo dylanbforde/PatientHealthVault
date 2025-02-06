@@ -50,15 +50,18 @@ export function EmergencyContactsForm({
 
   const handleSubmit = async (data: { contacts: EmergencyContact[] }) => {
     try {
-      await onSubmit(data.contacts);
+      // Validate and clean up contacts before submission
+      const cleanedContacts = data.contacts.map(contact => ({
+        ...contact,
+        email: contact.email || undefined // Remove empty email strings
+      }));
 
-      // Force refetch both queries to ensure widgets are updated
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["/api/user"] }),
-        queryClient.invalidateQueries({ queryKey: ["/api/shared-records"] })
-      ]);
+      await onSubmit(cleanedContacts);
 
-      // Immediately refetch user data to update widgets
+      // Force an immediate refetch of user data
+      await queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+
+      // Wait for the user data to be refetched
       await queryClient.fetchQuery({ queryKey: ["/api/user"] });
 
       toast({

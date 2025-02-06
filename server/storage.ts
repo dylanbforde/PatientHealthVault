@@ -101,7 +101,7 @@ export class DatabaseStorage implements IStorage {
       return [];
     }
 
-    // Only get records that are:
+    // Get only records that are:
     // 1. NOT owned by this user
     // 2. Either explicitly shared with them or accessible via emergency contact status
     const records = await db
@@ -117,7 +117,7 @@ export class DatabaseStorage implements IStorage {
               SELECT 1 FROM jsonb_array_elements(${healthRecords.sharedWith}) as share
               WHERE (share->>'username')::text = ${username}
             )`,
-            // Include emergency-accessible records where user is an emergency contact
+            // Include emergency-accessible records where user is an emergency contact with view permission
             and(
               eq(healthRecords.isEmergencyAccessible, true),
               sql`EXISTS (
