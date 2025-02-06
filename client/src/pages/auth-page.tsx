@@ -124,9 +124,7 @@ function RegisterForm() {
       username: "",
       password: "",
       fullName: "",
-      bloodType: "",
       allergies: [],
-      emergencyContact: "",
     },
   });
 
@@ -148,14 +146,6 @@ function RegisterForm() {
         <div>
           <Label htmlFor="fullName">Full Name</Label>
           <Input id="fullName" {...register("fullName")} />
-        </div>
-        <div>
-          <Label htmlFor="bloodType">Blood Type (optional)</Label>
-          <Input id="bloodType" {...register("bloodType")} />
-        </div>
-        <div>
-          <Label htmlFor="emergencyContact">Emergency Contact (optional)</Label>
-          <Input id="emergencyContact" {...register("emergencyContact")} />
         </div>
         <Button
           type="submit"
