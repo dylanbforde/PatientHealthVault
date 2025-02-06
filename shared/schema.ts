@@ -12,11 +12,39 @@ export const emergencyContactSchema = z.object({
   canViewRecords: z.boolean().default(false),
 });
 
+// Update the health record content schema
+const healthRecordContentSchema = z.object({
+  notes: z.string().min(1, "Notes are required"),
+  diagnosis: z.string().min(1, "Diagnosis is required"),
+  treatment: z.string().min(1, "Treatment plan is required"),
+  privateNotes: z.string().optional(),
+});
+
 // Define shared record access schema
 export const sharedAccessSchema = z.object({
   username: z.string(),
   accessGrantedAt: z.date(),
   accessLevel: z.enum(["view", "emergency"]),
+});
+
+// Custom schema for health records that properly handles date
+const healthRecordSchema = z.object({
+  patientUuid: z.string().uuid(), // Changed from userId to patientUuid
+  title: z.string().min(1, "Title is required"),
+  date: z.preprocess((arg) => {
+    if (typeof arg === "string" || arg instanceof Date) return new Date(arg);
+    return arg;
+  }, z.date()),
+  recordType: z.string().min(1, "Record type is required"),
+  content: healthRecordContentSchema,
+  facility: z.string().min(1, "Facility is required"),
+  sharedWith: sharedAccessSchema.array().default([]),
+  isEmergencyAccessible: z.boolean().default(false),
+  signature: z.string().nullable().optional(),
+  verifiedAt: z.date().nullable().optional(),
+  verifiedBy: z.string().nullable().optional(),
+  status: z.enum(["pending", "accepted", "rejected"]).default("pending"),
+  sharedByGP: z.string().optional(),
 });
 
 export const users = pgTable("users", {
@@ -53,27 +81,6 @@ export const healthRecords = pgTable("health_records", {
   sharedByGP: text("shared_by_gp"), // GP username who shared the record
 });
 
-// Custom schema for health records that properly handles date
-const healthRecordSchema = z.object({
-  patientUuid: z.string().uuid(), // Changed from userId to patientUuid
-  title: z.string().min(1, "Title is required"),
-  date: z.preprocess((arg) => {
-    if (typeof arg === "string" || arg instanceof Date) return new Date(arg);
-    return arg;
-  }, z.date()),
-  recordType: z.string().min(1, "Record type is required"),
-  content: z.object({
-    notes: z.string()
-  }).or(z.record(z.unknown())),
-  facility: z.string().min(1, "Facility is required"),
-  sharedWith: sharedAccessSchema.array().default([]),
-  isEmergencyAccessible: z.boolean().default(false),
-  signature: z.string().nullable().optional(),
-  verifiedAt: z.date().nullable().optional(),
-  verifiedBy: z.string().nullable().optional(),
-  status: z.enum(["pending", "accepted", "rejected"]).default("pending"),
-  sharedByGP: z.string().optional(),
-});
 
 // Update the insert schema for users
 export const insertUserSchema = createInsertSchema(users).extend({
