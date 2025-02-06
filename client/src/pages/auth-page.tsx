@@ -9,12 +9,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { insertUserSchema } from "@shared/schema";
 import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
-import { useEffect } from "react";
-import { Checkbox } from "@/components/ui/checkbox";
+import { useEffect, useState } from "react";
 
 export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
   const [, setLocation] = useLocation();
+  const [isGPRegistration, setIsGPRegistration] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -50,10 +50,10 @@ export default function AuthPage() {
           <TabsContent value="register">
             <Card>
               <CardHeader>
-                <CardTitle>Create Account</CardTitle>
+                <CardTitle>{isGPRegistration ? "Create GP Account" : "Create Account"}</CardTitle>
               </CardHeader>
               <CardContent>
-                <RegisterForm />
+                <RegisterForm isGP={isGPRegistration} />
               </CardContent>
             </Card>
           </TabsContent>
@@ -75,6 +75,15 @@ export default function AuthPage() {
               <li>Enable emergency access for critical situations</li>
               <li>Keep track of allergies and important health information</li>
             </ul>
+            <div className="pt-6 border-t border-primary-foreground/20">
+              <p className="text-sm mb-2">Are you a healthcare provider?</p>
+              <button 
+                onClick={() => setIsGPRegistration(true)}
+                className="text-sm underline hover:text-primary-foreground/80 transition-colors"
+              >
+                Register as a GP
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -117,9 +126,9 @@ function LoginForm() {
   );
 }
 
-function RegisterForm() {
+function RegisterForm({ isGP }: { isGP: boolean }) {
   const { registerMutation } = useAuth();
-  const { register, handleSubmit, watch } = useForm({
+  const { register, handleSubmit } = useForm({
     resolver: zodResolver(insertUserSchema),
     defaultValues: {
       username: "",
@@ -127,14 +136,12 @@ function RegisterForm() {
       fullName: "",
       allergies: [],
       emergencyContacts: [],
-      isGP: false
+      isGP
     },
   });
 
-  const isGP = watch("isGP");
-
   return (
-    <form onSubmit={handleSubmit((data) => registerMutation.mutate(data))}>
+    <form onSubmit={handleSubmit((data) => registerMutation.mutate({ ...data, isGP }))}>
       <div className="space-y-4">
         <div>
           <Label htmlFor="register-username">Username</Label>
@@ -151,12 +158,6 @@ function RegisterForm() {
         <div>
           <Label htmlFor="fullName">Full Name</Label>
           <Input id="fullName" {...register("fullName")} />
-        </div>
-        <div className="flex items-center space-x-2">
-          <Checkbox id="isGP" {...register("isGP")} />
-          <Label htmlFor="isGP" className="text-sm font-medium leading-none cursor-pointer">
-            Register as a GP (General Practitioner)
-          </Label>
         </div>
         {isGP && (
           <div className="rounded-lg bg-muted p-4">
