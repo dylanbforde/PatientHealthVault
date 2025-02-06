@@ -266,7 +266,7 @@ export class DatabaseStorage implements IStorage {
     const recordToCreate = {
       ...record,
       userId: patient.id, // Explicitly set to patient's ID
-      sharedWith: record.sharedWith || [{ username: patient.username }], // Share with the patient automatically
+      sharedWith: [{ username: patient.username }], // Share with the patient automatically
       verifiedAt: null,
       verifiedBy: null,
       signature: null,
