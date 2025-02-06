@@ -84,14 +84,34 @@ export function ViewRecordDialog({ record }: { record: HealthRecord }) {
               <h3 className="font-medium mb-2">Healthcare Facility</h3>
               <p className="text-sm text-muted-foreground">{record.facility}</p>
             </div>
-            <div>
-              <h3 className="font-medium mb-2">Record Details</h3>
-              <div className="bg-muted p-4 rounded-lg">
-                <p className="text-sm whitespace-pre-wrap">
-                  {typeof record.content === 'object' && 'notes' in record.content ? record.content.notes : ''}
-                </p>
-              </div>
-            </div>
+            {record.content && typeof record.content === 'object' && (
+              <>
+                <div>
+                  <h3 className="font-medium mb-2">Diagnosis</h3>
+                  <div className="bg-muted p-4 rounded-lg">
+                    <p className="text-sm whitespace-pre-wrap">
+                      {'diagnosis' in record.content ? record.content.diagnosis : ''}
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  <h3 className="font-medium mb-2">Treatment Plan</h3>
+                  <div className="bg-muted p-4 rounded-lg">
+                    <p className="text-sm whitespace-pre-wrap">
+                      {'treatment' in record.content ? record.content.treatment : ''}
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  <h3 className="font-medium mb-2">Medical Notes</h3>
+                  <div className="bg-muted p-4 rounded-lg">
+                    <p className="text-sm whitespace-pre-wrap">
+                      {'notes' in record.content ? record.content.notes : ''}
+                    </p>
+                  </div>
+                </div>
+              </>
+            )}
             <div>
               <h3 className="font-medium mb-2">Emergency Access</h3>
               <p className="text-sm text-muted-foreground">

@@ -30,9 +30,10 @@ const patientCodeSchema = z.object({
   patientCode: z.string().min(1, "Patient code is required"),
 });
 
-// Extend the health record schema for GP creation
+// Update the health record schema to include private notes
 const gpHealthRecordSchema = z.object({
   notes: z.string().min(1, "Medical notes are required"),
+  privateNotes: z.string().optional(),
   diagnosis: z.string().min(1, "Diagnosis is required"),
   treatment: z.string().min(1, "Treatment plan is required"),
 });
@@ -53,6 +54,7 @@ export default function GPDashboard() {
     resolver: zodResolver(gpHealthRecordSchema),
     defaultValues: {
       notes: "",
+      privateNotes: "",
       diagnosis: "",
       treatment: "",
     },
@@ -96,13 +98,6 @@ export default function GPDashboard() {
     mutationFn: async (data: z.infer<typeof gpHealthRecordSchema>) => {
       if (!selectedPatient) throw new Error("No patient selected");
 
-      console.log("Creating record for patient:", {
-        patientId: selectedPatient.id,
-        patientUuid: selectedPatient.uuid,
-        patientName: selectedPatient.fullName,
-        gpName: user?.fullName
-      });
-
       const record = {
         patientUuid: selectedPatient.uuid, // Use the UUID instead of userId
         title: `${data.diagnosis} - ${format(new Date(), "PP")}`,
@@ -112,14 +107,14 @@ export default function GPDashboard() {
         content: {
           notes: data.notes,
           diagnosis: data.diagnosis,
-          treatment: data.treatment
+          treatment: data.treatment,
+          privateNotes: data.privateNotes || ""
         },
         isEmergencyAccessible: false,
         sharedWith: [],
         status: "pending"
       };
 
-      console.log("Sending record data:", JSON.stringify(record, null, 2));
       const res = await apiRequest("POST", "/api/health-records", record);
 
       if (!res.ok) {
@@ -129,7 +124,6 @@ export default function GPDashboard() {
       }
 
       const createdRecord = await res.json();
-      console.log("Created record:", JSON.stringify(createdRecord, null, 2));
       return createdRecord;
     },
     onSuccess: () => {
@@ -282,9 +276,23 @@ export default function GPDashboard() {
                           name="notes"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Medical Notes</FormLabel>
+                              <FormLabel>Medical Notes (Visible to Patient)</FormLabel>
                               <FormControl>
-                                <Textarea {...field} placeholder="Enter detailed medical notes" />
+                                <Textarea {...field} placeholder="Enter medical notes that will be visible to the patient" />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={recordForm.control}
+                          name="privateNotes"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Private Notes (GP Only)</FormLabel>
+                              <FormDescription>These notes will only be visible to GPs</FormDescription>
+                              <FormControl>
+                                <Textarea {...field} placeholder="Enter private notes (optional)" />
                               </FormControl>
                             </FormItem>
                           )}
