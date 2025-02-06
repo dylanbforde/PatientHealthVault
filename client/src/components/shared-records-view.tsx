@@ -7,18 +7,18 @@ import { Loader2 } from "lucide-react";
 export function SharedRecordsView() {
   const { data: records, isLoading } = useQuery<HealthRecord[]>({
     queryKey: ["/api/shared-records"],
-    staleTime: 0, // Don't cache the data
-    cacheTime: 0, // Remove from cache immediately when component unmounts
+    staleTime: 0,
+    gcTime: 0,
   });
 
   if (isLoading) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Shared Records</CardTitle>
+          <CardTitle className="font-mono tracking-wider uppercase">Shared Records</CardTitle>
         </CardHeader>
         <CardContent className="flex justify-center">
-          <Loader2 className="h-6 w-6 animate-spin" />
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </CardContent>
       </Card>
     );
@@ -27,24 +27,26 @@ export function SharedRecordsView() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Shared Records</CardTitle>
+        <CardTitle className="font-mono tracking-wider uppercase">Shared Records</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
           {records?.map((record) => (
-            <div key={record.id} className="border-b pb-4 last:border-0">
-              <h4 className="font-medium">{record.title}</h4>
-              <p className="text-sm text-muted-foreground">
+            <div key={record.id} className="border border-primary/20 bg-background p-4 rounded">
+              <h4 className="font-mono font-medium tracking-wider text-primary">{record.title}</h4>
+              <p className="font-mono text-sm text-muted-foreground tracking-wider">
                 {format(new Date(record.date), "PPP")}
               </p>
-              <p className="text-sm">{record.facility}</p>
-              <p className="text-sm mt-2">
+              <p className="font-mono text-sm text-primary/80 tracking-wider">{record.facility}</p>
+              <p className="font-mono text-sm mt-2 text-muted-foreground tracking-wider whitespace-pre-wrap">
                 {typeof record.content === 'object' && 'notes' in record.content ? record.content.notes : ''}
               </p>
             </div>
           ))}
           {!records?.length && (
-            <p className="text-sm text-muted-foreground">No shared records found</p>
+            <p className="font-mono text-sm text-muted-foreground tracking-wider">
+              No shared records found
+            </p>
           )}
         </div>
       </CardContent>
