@@ -146,19 +146,34 @@ export class DatabaseStorage implements IStorage {
       patientCode: user?.patientCode
     });
 
-    // For GPs, get records they created (where facility matches their name)
-    // For patients, get records where they are the userId
-    const records = await db
-      .select()
-      .from(healthRecords)
-      .where(
-        user?.isGP
-          ? eq(healthRecords.facility, user.fullName || '')
-          : eq(healthRecords.userId, userId)
-      );
+    let records;
+    if (user?.isGP) {
+      // For GPs, get records they've created
+      records = await db
+        .select()
+        .from(healthRecords)
+        .where(eq(healthRecords.facility, user.fullName || ''));
+    } else {
+      // For patients, get records where:
+      // 1. They are the userId (their records)
+      // 2. OR records are shared with them
+      records = await db
+        .select()
+        .from(healthRecords)
+        .where(
+          or(
+            eq(healthRecords.userId, userId),
+            sql`EXISTS (
+              SELECT 1 FROM jsonb_array_elements(${healthRecords.sharedWith}) as share
+              WHERE (share->>'username')::text = ${user?.username}
+            )`
+          )
+        );
+    }
 
     console.log('Found records for user:', {
       userId,
+      userIsGP: user?.isGP,
       recordCount: records.length,
       records: records.map(r => ({
         id: r.id,
@@ -250,7 +265,7 @@ export class DatabaseStorage implements IStorage {
     const recordToCreate = {
       ...record,
       userId: patient.id, // Explicitly set to patient's ID
-      sharedWith: record.sharedWith || [],
+      sharedWith: [{ username: patient.username }], // Share with the patient automatically
       verifiedAt: null,
       verifiedBy: null,
       signature: null,
