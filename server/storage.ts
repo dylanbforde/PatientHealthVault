@@ -142,14 +142,20 @@ export class DatabaseStorage implements IStorage {
     console.log('User details:', {
       id: user?.id,
       username: user?.username,
-      isGP: user?.isGP
+      isGP: user?.isGP,
+      patientCode: user?.patientCode
     });
 
-    // Fetch records where this user is either the owner OR the record is shared with them
+    // For patients, get records where they are the owner
+    // For GPs, get records they created
     const records = await db
       .select()
       .from(healthRecords)
-      .where(eq(healthRecords.userId, userId));
+      .where(
+        user?.isGP
+          ? eq(healthRecords.facility, user.fullName || '')
+          : eq(healthRecords.userId, userId)
+      );
 
     console.log('Found records for user:', {
       userId,
@@ -222,12 +228,27 @@ export class DatabaseStorage implements IStorage {
 
   async createHealthRecord(record: InsertHealthRecord): Promise<HealthRecord> {
     console.log('Creating health record with data:', JSON.stringify(record, null, 2));
-    console.log('Creating record for userId:', record.userId);
 
-    // Create a new object to avoid modifying the input
+    // Get the patient's information to verify the record creation
+    const [patient] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, record.userId));
+
+    if (!patient) {
+      throw new Error('Patient not found');
+    }
+
+    console.log('Creating record for patient:', {
+      patientId: patient.id,
+      patientCode: patient.patientCode,
+      patientName: patient.fullName
+    });
+
     const recordToCreate = {
       ...record,
-      // Do not modify or override userId here
+      // Ensure we use the patient's ID
+      userId: patient.id,
       sharedWith: record.sharedWith || [],
       verifiedAt: null,
       verifiedBy: null,
