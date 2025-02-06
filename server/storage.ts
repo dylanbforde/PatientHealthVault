@@ -202,6 +202,7 @@ export class DatabaseStorage implements IStorage {
     // Ensure data is properly formatted
     const validatedRecord = {
       ...record,
+      userId: record.userId,  // Ensure this is explicitly set
       sharedWith: record.sharedWith || [], // Ensure sharedWith is initialized as an empty array
       verifiedAt: null,
       verifiedBy: null,
