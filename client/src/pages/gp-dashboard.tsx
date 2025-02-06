@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormDescription } from "@/components/ui/form";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -13,19 +13,31 @@ import { NavBar } from "@/components/nav-bar";
 import { AnimatedLayout } from "@/components/animated-layout";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Loader2, FileUp } from "lucide-react";
+import { Loader2, FileUp, Stethoscope } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 
 const patientCodeSchema = z.object({
   patientCode: z.string().min(1, "Patient code is required"),
+});
+
+// Extend the health record schema for GP creation
+const gpHealthRecordSchema = insertHealthRecordSchema.extend({
+  notes: z.string().min(1, "Medical notes are required"),
+  diagnosis: z.string().min(1, "Diagnosis is required"),
+  treatment: z.string().min(1, "Treatment plan is required"),
 });
 
 export default function GPDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [selectedPatient, setSelectedPatient] = useState<User | null>(null);
-  
-  const form = useForm<z.infer<typeof patientCodeSchema>>({
+
+  const lookupForm = useForm<z.infer<typeof patientCodeSchema>>({
     resolver: zodResolver(patientCodeSchema),
+  });
+
+  const recordForm = useForm<z.infer<typeof gpHealthRecordSchema>>({
+    resolver: zodResolver(gpHealthRecordSchema),
   });
 
   const lookupMutation = useMutation({
@@ -49,18 +61,27 @@ export default function GPDashboard() {
     },
   });
 
-  const uploadMutation = useMutation({
-    mutationFn: async (data: z.infer<typeof insertHealthRecordSchema>) => {
-      const res = await apiRequest("POST", "/api/records", data);
+  const createRecordMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof gpHealthRecordSchema>) => {
+      if (!selectedPatient) throw new Error("No patient selected");
+
+      const record = {
+        ...data,
+        userId: selectedPatient.id,
+        status: "pending",
+        facility: user?.fullName || "Unknown GP",
+        date: new Date().toISOString(),
+      };
+
+      const res = await apiRequest("POST", "/api/health-records", record);
       return res.json();
     },
     onSuccess: () => {
       toast({
         title: "Success",
-        description: "Record uploaded successfully. Patient will need to accept it.",
+        description: "Record created and shared with patient for review.",
       });
-      setSelectedPatient(null);
-      form.reset();
+      recordForm.reset();
     },
     onError: (error: Error) => {
       toast({
@@ -92,66 +113,139 @@ export default function GPDashboard() {
     <AnimatedLayout>
       <NavBar />
       <main className="container mx-auto px-4 py-8">
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-mono tracking-wider uppercase flex items-center gap-2">
-              <FileUp className="h-4 w-4 text-primary" />
-              Upload Patient Records
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit((data) => lookupMutation.mutate(data))} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="patientCode"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="font-mono text-sm">Patient Code</FormLabel>
-                      <FormControl>
-                        <Input 
-                          {...field} 
-                          placeholder="Enter patient's unique code"
-                          className="font-mono"
-                          disabled={lookupMutation.isPending || !!selectedPatient}
-                        />
-                      </FormControl>
-                    </FormItem>
+        <div className="space-y-8">
+          {/* Patient Lookup Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="font-mono tracking-wider uppercase flex items-center gap-2">
+                <Stethoscope className="h-4 w-4 text-primary" />
+                Patient Lookup
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Form {...lookupForm}>
+                <form onSubmit={lookupForm.handleSubmit((data) => lookupMutation.mutate(data))} className="space-y-4">
+                  <FormField
+                    control={lookupForm.control}
+                    name="patientCode"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="font-mono text-sm">Patient Code</FormLabel>
+                        <FormDescription>
+                          Enter the patient's unique code to look up their record
+                        </FormDescription>
+                        <FormControl>
+                          <Input 
+                            {...field} 
+                            placeholder="Enter patient's unique code"
+                            className="font-mono"
+                            disabled={lookupMutation.isPending || !!selectedPatient}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  {!selectedPatient && (
+                    <Button 
+                      type="submit" 
+                      disabled={lookupMutation.isPending}
+                      className="w-full font-mono"
+                    >
+                      {lookupMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Lookup Patient
+                    </Button>
                   )}
-                />
-                {!selectedPatient && (
-                  <Button 
-                    type="submit" 
-                    disabled={lookupMutation.isPending}
-                    className="w-full font-mono"
-                  >
-                    {lookupMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Lookup Patient
-                  </Button>
-                )}
-              </form>
-            </Form>
+                </form>
+              </Form>
+            </CardContent>
+          </Card>
 
-            {selectedPatient && (
-              <div className="mt-8">
-                <div className="border border-primary/20 bg-background p-4 rounded mb-4">
+          {/* Record Creation Card */}
+          {selectedPatient && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-mono tracking-wider uppercase flex items-center gap-2">
+                  <FileUp className="h-4 w-4 text-primary" />
+                  Create Medical Record
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="mb-6 p-4 border border-primary/20 rounded-lg bg-muted/50">
                   <p className="font-mono text-sm">
-                    Patient: <span className="text-primary">{selectedPatient.fullName}</span>
+                    Creating record for: <span className="text-primary">{selectedPatient.fullName}</span>
                   </p>
                 </div>
 
-                {/* Add record upload form here */}
-                <Button 
-                  onClick={() => setSelectedPatient(null)} 
-                  variant="outline" 
-                  className="w-full font-mono"
-                >
-                  Clear Selection
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                <Form {...recordForm}>
+                  <form onSubmit={recordForm.handleSubmit((data) => createRecordMutation.mutate(data))} className="space-y-4">
+                    <FormField
+                      control={recordForm.control}
+                      name="notes"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Medical Notes</FormLabel>
+                          <FormControl>
+                            <Textarea {...field} placeholder="Enter detailed medical notes" />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={recordForm.control}
+                      name="diagnosis"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Diagnosis</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="Enter diagnosis" />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={recordForm.control}
+                      name="treatment"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Treatment Plan</FormLabel>
+                          <FormControl>
+                            <Textarea {...field} placeholder="Enter treatment plan" />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+
+                    <div className="flex gap-4">
+                      <Button 
+                        type="submit" 
+                        className="flex-1"
+                        disabled={createRecordMutation.isPending}
+                      >
+                        {createRecordMutation.isPending && (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        )}
+                        Create Record
+                      </Button>
+                      <Button 
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setSelectedPatient(null);
+                          lookupForm.reset();
+                          recordForm.reset();
+                        }}
+                      >
+                        Clear Form
+                      </Button>
+                    </div>
+                  </form>
+                </Form>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </main>
     </AnimatedLayout>
   );

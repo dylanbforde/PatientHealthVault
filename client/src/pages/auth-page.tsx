@@ -10,6 +10,7 @@ import { insertUserSchema } from "@shared/schema";
 import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
 import { useEffect } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
@@ -118,15 +119,19 @@ function LoginForm() {
 
 function RegisterForm() {
   const { registerMutation } = useAuth();
-  const { register, handleSubmit } = useForm({
+  const { register, handleSubmit, watch } = useForm({
     resolver: zodResolver(insertUserSchema),
     defaultValues: {
       username: "",
       password: "",
       fullName: "",
       allergies: [],
+      emergencyContacts: [],
+      isGP: false
     },
   });
+
+  const isGP = watch("isGP");
 
   return (
     <form onSubmit={handleSubmit((data) => registerMutation.mutate(data))}>
@@ -147,6 +152,24 @@ function RegisterForm() {
           <Label htmlFor="fullName">Full Name</Label>
           <Input id="fullName" {...register("fullName")} />
         </div>
+        <div className="flex items-center space-x-2">
+          <Checkbox id="isGP" {...register("isGP")} />
+          <Label htmlFor="isGP" className="text-sm font-medium leading-none cursor-pointer">
+            Register as a GP (General Practitioner)
+          </Label>
+        </div>
+        {isGP && (
+          <div className="rounded-lg bg-muted p-4">
+            <p className="text-sm text-muted-foreground mb-2">
+              As a GP, you will be able to:
+            </p>
+            <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
+              <li>Look up patients using their unique codes</li>
+              <li>Create and share medical records</li>
+              <li>Manage patient information securely</li>
+            </ul>
+          </div>
+        )}
         <Button
           type="submit"
           className="w-full"
