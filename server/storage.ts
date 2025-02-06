@@ -206,6 +206,8 @@ export class DatabaseStorage implements IStorage {
       verifiedAt: null,
       verifiedBy: null,
       signature: null,
+      status: record.status || "pending",
+      isEmergencyAccessible: record.isEmergencyAccessible || false
     };
 
     console.log('Validated record data:', JSON.stringify(validatedRecord, null, 2));

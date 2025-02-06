@@ -31,7 +31,7 @@ const patientCodeSchema = z.object({
 });
 
 // Extend the health record schema for GP creation
-const gpHealthRecordSchema = insertHealthRecordSchema.extend({
+const gpHealthRecordSchema = z.object({
   notes: z.string().min(1, "Medical notes are required"),
   diagnosis: z.string().min(1, "Diagnosis is required"),
   treatment: z.string().min(1, "Treatment plan is required"),
@@ -51,11 +51,14 @@ export default function GPDashboard() {
   });
 
   // Query to fetch patient records when a patient is selected
-  const { data: patientRecords } = useQuery({
+  const { data: patientRecords, isLoading: isLoadingRecords } = useQuery({
     queryKey: ["/api/health-records", selectedPatient?.id],
     enabled: !!selectedPatient,
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/health-records?userId=${selectedPatient!.id}`);
+      if (!res.ok) {
+        throw new Error("Failed to fetch patient records");
+      }
       return res.json();
     },
   });
@@ -88,7 +91,7 @@ export default function GPDashboard() {
       const record = {
         userId: selectedPatient.id,
         title: `${data.diagnosis} - ${format(new Date(), "PP")}`,
-        date: new Date().toISOString(),
+        date: new Date(),
         recordType: "GP Visit",
         facility: user?.fullName || "Unknown GP",
         content: {
