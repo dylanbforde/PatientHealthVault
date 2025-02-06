@@ -75,7 +75,6 @@ export class DatabaseStorage implements IStorage {
     return record;
   }
 
-  // Existing methods remain unchanged
   async getUser(id: number): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
@@ -87,7 +86,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db.insert(users).values(insertUser).returning();
+    let userToCreate = { ...insertUser };
+
+    // Only generate a patient code for non-GP users
+    if (!insertUser.isGP) {
+      const patientCode = await this.generateUniquePatientCode();
+      userToCreate = { ...userToCreate, patientCode };
+    }
+
+    const [user] = await db.insert(users).values(userToCreate).returning();
     return user;
   }
 
