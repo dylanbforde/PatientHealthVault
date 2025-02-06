@@ -4,6 +4,7 @@ import { type HealthRecord } from "@shared/schema";
 import { format } from "date-fns";
 import { Loader2 } from "lucide-react";
 import { NavBar } from "@/components/nav-bar";
+import { AnimatedLayout } from "@/components/animated-layout";
 
 export default function SharedRecordsPage() {
   const { data: records, isLoading } = useQuery<HealthRecord[]>({
@@ -21,36 +22,38 @@ export default function SharedRecordsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <NavBar />
-      <main className="container mx-auto px-4 py-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Records Shared With You</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {records?.map((record) => (
-                <div key={record.id} className="border-b pb-4 last:border-0">
-                  <h4 className="font-medium">{record.title}</h4>
+    <AnimatedLayout>
+      <div className="min-h-screen bg-background">
+        <NavBar />
+        <main className="container mx-auto px-4 py-8">
+          <Card>
+            <CardHeader>
+              <CardTitle>Records Shared With You</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {records?.map((record) => (
+                  <div key={record.id} className="border-b pb-4 last:border-0">
+                    <h4 className="font-medium">{record.title}</h4>
+                    <p className="text-sm text-muted-foreground">
+                      {format(new Date(record.date), "PPP")}
+                    </p>
+                    <p className="text-sm">{record.facility}</p>
+                    <p className="text-sm mt-2">
+                      {typeof record.content === 'object' && 'notes' in record.content ? record.content.notes : ''}
+                    </p>
+                  </div>
+                ))}
+                {!records?.length && (
                   <p className="text-sm text-muted-foreground">
-                    {format(new Date(record.date), "PPP")}
+                    No shared records found
                   </p>
-                  <p className="text-sm">{record.facility}</p>
-                  <p className="text-sm mt-2">
-                    {typeof record.content === 'object' && 'notes' in record.content ? record.content.notes : ''}
-                  </p>
-                </div>
-              ))}
-              {!records?.length && (
-                <p className="text-sm text-muted-foreground">
-                  No shared records found
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </main>
-    </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </main>
+      </div>
+    </AnimatedLayout>
   );
 }
