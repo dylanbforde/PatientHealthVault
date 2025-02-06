@@ -133,24 +133,34 @@ export class DatabaseStorage implements IStorage {
   async getHealthRecords(userId: number): Promise<HealthRecord[]> {
     console.log('Fetching health records for user:', userId);
 
+    // Get user info for debugging
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId));
+
+    console.log('User details:', {
+      id: user?.id,
+      username: user?.username,
+      isGP: user?.isGP
+    });
+
     // Fetch records where this user is either the owner OR the record is shared with them
     const records = await db
       .select()
       .from(healthRecords)
-      .where(
-        or(
-          eq(healthRecords.userId, userId),
-          sql`EXISTS (
-            SELECT 1 FROM jsonb_array_elements(${healthRecords.sharedWith}) as share
-            WHERE (share->>'username')::text = (
-              SELECT username FROM users WHERE id = ${userId}
-            )
-          )`
-        )
-      )
-      .orderBy(sql`${healthRecords.date} DESC`);
+      .where(eq(healthRecords.userId, userId));
 
-    console.log('Found records:', JSON.stringify(records, null, 2));
+    console.log('Found records for user:', {
+      userId,
+      recordCount: records.length,
+      records: records.map(r => ({
+        id: r.id,
+        title: r.title,
+        userId: r.userId
+      }))
+    });
+
     return records;
   }
 
@@ -212,6 +222,7 @@ export class DatabaseStorage implements IStorage {
 
   async createHealthRecord(record: InsertHealthRecord): Promise<HealthRecord> {
     console.log('Creating health record with data:', JSON.stringify(record, null, 2));
+    console.log('Creating record for userId:', record.userId);
 
     // Ensure data is properly formatted and preserve the original userId
     const validatedRecord = {
@@ -232,7 +243,7 @@ export class DatabaseStorage implements IStorage {
       .values(validatedRecord)
       .returning();
 
-    console.log('Health record created:', JSON.stringify(newRecord, null, 2));
+    console.log('Created health record:', JSON.stringify(newRecord, null, 2));
     return newRecord;
   }
 

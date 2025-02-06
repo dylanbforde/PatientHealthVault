@@ -88,6 +88,11 @@ export default function GPDashboard() {
     mutationFn: async (data: z.infer<typeof gpHealthRecordSchema>) => {
       if (!selectedPatient) throw new Error("No patient selected");
 
+      console.log("Creating record for patient:", {
+        patientId: selectedPatient.id,
+        patientName: selectedPatient.fullName
+      });
+
       const record = {
         userId: selectedPatient.id,  // Explicitly set to patient's ID
         title: `${data.diagnosis} - ${format(new Date(), "PP")}`,
@@ -104,14 +109,18 @@ export default function GPDashboard() {
         status: "pending"
       };
 
-      console.log("Creating record for patient ID:", selectedPatient.id);
+      console.log("Sending record data:", JSON.stringify(record, null, 2));
       const res = await apiRequest("POST", "/api/health-records", record);
+
       if (!res.ok) {
         const errorData = await res.json();
         console.error("Server response error:", errorData);
         throw new Error(errorData.message || "Failed to create record");
       }
-      return res.json();
+
+      const createdRecord = await res.json();
+      console.log("Created record:", JSON.stringify(createdRecord, null, 2));
+      return createdRecord;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/health-records", selectedPatient?.id] });
