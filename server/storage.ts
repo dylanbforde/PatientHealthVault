@@ -79,9 +79,7 @@ export class DatabaseStorage implements IStorage {
       .from(healthRecords)
       .where(
         or(
-          // Records shared directly with the user
-          sql`${healthRecords.sharedWith}::jsonb @> jsonb_build_array(jsonb_build_object('username', ${username}))`,
-          // Records with emergency access enabled
+          sql`jsonb_path_exists(${healthRecords.sharedWith}, '$[*] ? (@.username == ${username})')`,
           eq(healthRecords.isEmergencyAccessible, true)
         )
       );

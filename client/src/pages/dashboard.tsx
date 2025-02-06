@@ -53,6 +53,7 @@ import type { InsertUser } from "@shared/schema";
 import { EmergencyContactsForm } from "@/components/emergency-contacts-form";
 import { SharedRecordsView } from "@/components/shared-records-view";
 import { NavBar } from "@/components/nav-bar";
+import { RecordSharingForm } from "@/components/record-sharing-form";
 
 
 export function ViewRecordDialog({ record }: { record: HealthRecord }) {
@@ -86,7 +87,9 @@ export function ViewRecordDialog({ record }: { record: HealthRecord }) {
             <div>
               <h3 className="font-medium mb-2">Record Details</h3>
               <div className="bg-muted p-4 rounded-lg">
-                <p className="text-sm whitespace-pre-wrap">{record.content.notes}</p>
+                <p className="text-sm whitespace-pre-wrap">
+                  {typeof record.content === 'object' && 'notes' in record.content ? record.content.notes : ''}
+                </p>
               </div>
             </div>
             <div>
@@ -184,7 +187,7 @@ function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
                   }
                   onChange={(e) => {
                     const date = new Date(e.target.value);
-                    date.setHours(12); 
+                    date.setHours(12);
                     field.onChange(date);
                   }}
                 />
@@ -371,7 +374,7 @@ export default function Dashboard() {
       insertUserSchema.pick({
         bloodType: true,
         allergies: true,
-        gpUsername: true, 
+        gpUsername: true,
         gpName: true,
         gpContact: true,
       })
@@ -379,7 +382,7 @@ export default function Dashboard() {
     defaultValues: {
       bloodType: user?.bloodType || "",
       allergies: user?.allergies || [],
-      gpUsername: user?.gpUsername || "", 
+      gpUsername: user?.gpUsername || "",
       gpName: user?.gpName || "",
       gpContact: user?.gpContact || "",
     },

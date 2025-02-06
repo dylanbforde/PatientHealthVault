@@ -15,6 +15,7 @@ import { type EmergencyContact, emergencyContactSchema } from "@shared/schema";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { queryClient } from "@/lib/queryClient";
 
 interface EmergencyContactsFormProps {
   contacts: EmergencyContact[];
@@ -50,6 +51,9 @@ export function EmergencyContactsForm({
   const handleSubmit = async (data: { contacts: EmergencyContact[] }) => {
     try {
       await onSubmit(data.contacts);
+      // Invalidate both the user query and shared records query
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/shared-records"] });
       toast({
         title: "Success",
         description: "Emergency contacts updated successfully",
