@@ -31,6 +31,8 @@ export const users = pgTable("users", {
   gpUsername: text("gp_username"),
   gpName: text("gp_name"),
   gpContact: text("gp_contact"),
+  isGP: boolean("is_gp").default(false),
+  patientCode: text("patient_code").unique(), // Unique code for GP record sharing
 });
 
 export const healthRecords = pgTable("health_records", {
@@ -46,6 +48,8 @@ export const healthRecords = pgTable("health_records", {
   signature: text("signature"),
   verifiedAt: timestamp("verified_at"),
   verifiedBy: text("verified_by"),
+  status: text("status").default("pending"), // pending, accepted, rejected
+  sharedByGP: text("shared_by_gp"), // GP username who shared the record
 });
 
 // Custom schema for health records that properly handles date
@@ -66,6 +70,8 @@ const healthRecordSchema = z.object({
   signature: z.string().nullable().optional(),
   verifiedAt: z.date().nullable().optional(),
   verifiedBy: z.string().nullable().optional(),
+  status: z.enum(["pending", "accepted", "rejected"]).default("pending"),
+  sharedByGP: z.string().optional(),
 });
 
 // Update the insert schema for users
@@ -74,6 +80,7 @@ export const insertUserSchema = createInsertSchema(users).extend({
   gpUsername: z.string().optional(),
   gpName: z.string().optional(),
   gpContact: z.string().optional(),
+  isGP: z.boolean().default(false),
 });
 
 export const insertHealthRecordSchema = healthRecordSchema;

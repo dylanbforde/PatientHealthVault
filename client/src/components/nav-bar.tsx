@@ -1,7 +1,7 @@
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { LogOut, Layout, FileText } from "lucide-react";
+import { LogOut, Layout, FileText, Stethoscope } from "lucide-react";
 import { LogoText } from "@/components/ui/logo";
 
 export function NavBar() {
@@ -17,20 +17,32 @@ export function NavBar() {
             <LogoText />
           </Link>
           <nav className="flex gap-6">
-            <Link 
-              href="/dashboard" 
-              className="flex items-center gap-2 text-sm font-mono text-muted-foreground hover:text-primary transition-colors uppercase tracking-wider"
-            >
-              <Layout className="h-4 w-4" />
-              Dashboard
-            </Link>
-            <Link 
-              href="/shared" 
-              className="flex items-center gap-2 text-sm font-mono text-muted-foreground hover:text-primary transition-colors uppercase tracking-wider"
-            >
-              <FileText className="h-4 w-4" />
-              Shared Records
-            </Link>
+            {user.isGP ? (
+              <Link 
+                href="/gp" 
+                className="flex items-center gap-2 text-sm font-mono text-muted-foreground hover:text-primary transition-colors uppercase tracking-wider"
+              >
+                <Stethoscope className="h-4 w-4" />
+                GP Dashboard
+              </Link>
+            ) : (
+              <>
+                <Link 
+                  href="/dashboard" 
+                  className="flex items-center gap-2 text-sm font-mono text-muted-foreground hover:text-primary transition-colors uppercase tracking-wider"
+                >
+                  <Layout className="h-4 w-4" />
+                  Dashboard
+                </Link>
+                <Link 
+                  href="/shared" 
+                  className="flex items-center gap-2 text-sm font-mono text-muted-foreground hover:text-primary transition-colors uppercase tracking-wider"
+                >
+                  <FileText className="h-4 w-4" />
+                  Shared Records
+                </Link>
+              </>
+            )}
           </nav>
         </div>
         <div className="flex items-center gap-4">

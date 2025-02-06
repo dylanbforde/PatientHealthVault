@@ -5,6 +5,8 @@ import { storage } from "./storage";
 import { insertHealthRecordSchema } from "@shared/schema";
 import { ZodError } from "zod";
 import { generateKeyPair, signRecord, verifyRecord } from "./crypto";
+import { hashPassword } from "./auth"; // Added import for hashPassword
+
 
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
@@ -75,6 +77,69 @@ export function registerRoutes(app: Express): Server {
   });
 
   // Add this route after the existing /api/health-records route
+  app.post("/api/lookup-patient", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    if (!req.user.isGP) return res.status(403).json({ message: "Only GPs can lookup patients" });
+
+    const { patientCode } = req.body;
+    try {
+      const patient = await storage.getUserByPatientCode(patientCode);
+      if (!patient) {
+        return res.status(404).json({ message: "Patient not found" });
+      }
+      res.json(patient);
+    } catch (err) {
+      console.error('Error looking up patient:', err);
+      res.status(500).json({ 
+        message: "Failed to lookup patient",
+        error: err instanceof Error ? err.message : "Unknown error" 
+      });
+    }
+  });
+
+  // Add these routes for managing shared record status
+  app.post("/api/health-records/:id/accept", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    const recordId = parseInt(req.params.id);
+    try {
+      const record = await storage.getHealthRecord(recordId);
+      if (!record || record.userId !== req.user.id) {
+        return res.status(404).json({ message: "Record not found" });
+      }
+
+      const updatedRecord = await storage.updateHealthRecordStatus(recordId, "accepted");
+      res.json(updatedRecord);
+    } catch (err) {
+      console.error('Error accepting record:', err);
+      res.status(500).json({ 
+        message: "Failed to accept record",
+        error: err instanceof Error ? err.message : "Unknown error" 
+      });
+    }
+  });
+
+  app.post("/api/health-records/:id/reject", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    const recordId = parseInt(req.params.id);
+    try {
+      const record = await storage.getHealthRecord(recordId);
+      if (!record || record.userId !== req.user.id) {
+        return res.status(404).json({ message: "Record not found" });
+      }
+
+      const updatedRecord = await storage.updateHealthRecordStatus(recordId, "rejected");
+      res.json(updatedRecord);
+    } catch (err) {
+      console.error('Error rejecting record:', err);
+      res.status(500).json({ 
+        message: "Failed to reject record",
+        error: err instanceof Error ? err.message : "Unknown error" 
+      });
+    }
+  });
+
   app.get("/api/shared-records", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 
@@ -260,6 +325,32 @@ export function registerRoutes(app: Express): Server {
       });
     }
   });
+
+  // Update the existing /api/register route to generate a patient code for non-GP users
+  app.post("/api/register", async (req, res, next) => {
+    const existingUser = await storage.getUserByUsername(req.body.username);
+    if (existingUser) {
+      return res.status(400).send("Username already exists");
+    }
+
+    // Generate a unique patient code for non-GP users
+    let patientCode = null;
+    if (!req.body.isGP) {
+      patientCode = await storage.generateUniquePatientCode();
+    }
+
+    const user = await storage.createUser({
+      ...req.body,
+      patientCode,
+      password: await hashPassword(req.body.password),
+    });
+
+    req.login(user, (err) => {
+      if (err) return next(err);
+      res.status(201).json(user);
+    });
+  });
+
 
   const httpServer = createServer(app);
   return httpServer;

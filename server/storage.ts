@@ -4,20 +4,24 @@ import { eq, or, and, sql } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
+import { randomBytes } from "crypto";
 
 const PostgresStore = connectPg(session);
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByPatientCode(patientCode: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUserPublicKey(userId: number, publicKey: string): Promise<User>;
   updateUser(id: number, data: Partial<User>): Promise<User>;
+  generateUniquePatientCode(): Promise<string>;
 
   getHealthRecords(userId: number): Promise<HealthRecord[]>;
   getHealthRecord(id: number): Promise<HealthRecord | undefined>;
   createHealthRecord(record: InsertHealthRecord): Promise<HealthRecord>;
   updateHealthRecordSharing(id: number, sharedWith: any[]): Promise<HealthRecord>;
+  updateHealthRecordStatus(id: number, status: "pending" | "accepted" | "rejected"): Promise<HealthRecord>;
   updateEmergencyAccess(id: number, isEmergencyAccessible: boolean): Promise<HealthRecord>;
   verifyHealthRecord(id: number, verifiedBy: string): Promise<HealthRecord>;
   getSharedRecords(username: string): Promise<HealthRecord[]>;
@@ -35,6 +39,43 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
+  async getUserByPatientCode(patientCode: string): Promise<User | undefined> {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.patientCode, patientCode));
+    return user;
+  }
+
+  async generateUniquePatientCode(): Promise<string> {
+    // Keep generating codes until we find a unique one
+    while (true) {
+      // Generate a 6-character alphanumeric code
+      const code = randomBytes(3)
+        .toString('hex')
+        .toUpperCase();
+
+      // Check if this code is already in use
+      const existingUser = await this.getUserByPatientCode(code);
+      if (!existingUser) {
+        return code;
+      }
+    }
+  }
+
+  async updateHealthRecordStatus(
+    id: number,
+    status: "pending" | "accepted" | "rejected"
+  ): Promise<HealthRecord> {
+    const [record] = await db
+      .update(healthRecords)
+      .set({ status })
+      .where(eq(healthRecords.id, id))
+      .returning();
+    return record;
+  }
+
+  // Existing methods remain unchanged
   async getUser(id: number): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;

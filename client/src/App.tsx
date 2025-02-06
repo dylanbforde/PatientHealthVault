@@ -7,6 +7,7 @@ import HomePage from "@/pages/home-page";
 import AuthPage from "@/pages/auth-page";
 import Dashboard from "@/pages/dashboard";
 import SharedRecords from "@/pages/shared-records";
+import GPDashboard from "@/pages/gp-dashboard";
 import { ProtectedRoute } from "./lib/protected-route";
 import { AuthProvider } from "./hooks/use-auth";
 import { AnimatePresence } from "framer-motion";
@@ -21,6 +22,7 @@ function Router() {
         <ProtectedRoute path="/" component={HomePage} />
         <ProtectedRoute path="/dashboard" component={Dashboard} />
         <ProtectedRoute path="/shared" component={SharedRecords} />
+        <ProtectedRoute path="/gp" component={GPDashboard} />
         <Route component={NotFound} />
       </Switch>
     </AnimatePresence>
