@@ -2,15 +2,26 @@ import { pgTable, text, serial, integer, boolean, jsonb, timestamp } from "drizz
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Define the emergency contact schema
+export const emergencyContactSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  relationship: z.string().min(1, "Relationship is required"),
+  phone: z.string().min(1, "Phone number is required"),
+  email: z.string().email("Invalid email").optional(),
+  canViewRecords: z.boolean().default(false),
+});
+
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   fullName: text("full_name").notNull(),
-  emergencyContact: text("emergency_contact"),
+  emergencyContacts: jsonb("emergency_contacts").$type<z.infer<typeof emergencyContactSchema>[]>(),
   bloodType: text("blood_type"),
   allergies: text("allergies").array(),
   publicKey: text("public_key"),
+  gpName: text("gp_name"),
+  gpContact: text("gp_contact"),
 });
 
 export const healthRecords = pgTable("health_records", {
@@ -29,7 +40,7 @@ export const healthRecords = pgTable("health_records", {
 });
 
 // Custom schema for health records that properly handles date
-const healthRecordInsertSchema = z.object({
+const healthRecordSchema = z.object({
   userId: z.number(),
   title: z.string().min(1, "Title is required"),
   date: z.preprocess((arg) => {
@@ -48,19 +59,17 @@ const healthRecordInsertSchema = z.object({
   verifiedBy: z.string().nullable().optional(),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-  fullName: true,
-  emergencyContact: true,
-  bloodType: true,
-  allergies: true,
-  publicKey: true,
+// Update the insert schema for users
+export const insertUserSchema = createInsertSchema(users).extend({
+  emergencyContacts: emergencyContactSchema.array().default([]),
+  gpName: z.string().optional(),
+  gpContact: z.string().optional(),
 });
 
-export const insertHealthRecordSchema = healthRecordInsertSchema;
+export const insertHealthRecordSchema = healthRecordSchema;
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type HealthRecord = typeof healthRecords.$inferSelect;
 export type InsertHealthRecord = z.infer<typeof insertHealthRecordSchema>;
+export type EmergencyContact = z.infer<typeof emergencyContactSchema>;

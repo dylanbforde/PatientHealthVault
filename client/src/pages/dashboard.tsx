@@ -50,6 +50,7 @@ import { Timeline } from "@/components/timeline";
 import { DashboardWidgets } from "@/components/dashboard-widgets";
 import { insertUserSchema } from "@shared/schema";
 import type { InsertUser } from "@shared/schema";
+import { EmergencyContactsForm } from "@/components/emergency-contacts-form";
 
 
 export function ViewRecordDialog({ record }: { record: HealthRecord }) {
@@ -352,12 +353,16 @@ export default function Dashboard() {
         bloodType: true,
         emergencyContact: true,
         allergies: true,
+        gpName: true,
+        gpContact: true, // Added GP fields
       })
     ),
     defaultValues: {
       bloodType: user?.bloodType || "",
       emergencyContact: user?.emergencyContact || "",
       allergies: user?.allergies || [],
+      gpName: user?.gpName || "", // Added GP default values
+      gpContact: user?.gpContact || "", // Added GP default values
     },
   });
 
@@ -467,6 +472,72 @@ export default function Dashboard() {
                                 field.onChange(allergies);
                               }}
                             />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <div className="flex justify-end">
+                    <Button type="submit" disabled={updateProfile.isPending}>
+                      {updateProfile.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        "Save Changes"
+                      )}
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Emergency Contacts</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <EmergencyContactsForm
+                contacts={user?.emergencyContacts || []}
+                onSubmit={(contacts) => updateProfile.mutate({ emergencyContacts: contacts })}
+                isSubmitting={updateProfile.isPending}
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>General Practitioner (GP) Information</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit((data) => updateProfile.mutate(data))} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="gpName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>GP Name</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="Enter your GP's name" value={field.value || ""} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="gpContact"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>GP Contact Information</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="GP's phone number or email" value={field.value || ""} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
