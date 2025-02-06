@@ -22,11 +22,11 @@ export interface IStorage {
   verifyHealthRecord(id: number, verifiedBy: string): Promise<HealthRecord>;
   getSharedRecords(username: string): Promise<HealthRecord[]>;
 
-  sessionStore: session.SessionStore;
+  sessionStore: session.Store;
 }
 
 export class DatabaseStorage implements IStorage {
-  sessionStore: session.SessionStore;
+  sessionStore: session.Store;
 
   constructor() {
     this.sessionStore = new PostgresStore({
@@ -68,45 +68,49 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  // Only return records owned by the user
+  // Only return records owned by this user
   async getHealthRecords(userId: number): Promise<HealthRecord[]> {
     return db
       .select()
       .from(healthRecords)
-      .where(eq(healthRecords.userId, userId));
+      .where(eq(healthRecords.userId, userId))
+      .orderBy(sql`${healthRecords.date} DESC`);
   }
 
-  // Get records shared with the user
+  // Only return records explicitly shared with this user or accessible via emergency contact status
   async getSharedRecords(username: string): Promise<HealthRecord[]> {
-    return db
+    const query = db
       .select()
       .from(healthRecords)
       .where(
         and(
-          // Only get records NOT owned by this user
+          // Exclude records owned by this user
           sql`${healthRecords.userId} != (SELECT id FROM users WHERE username = ${username})`,
           or(
-            // Records explicitly shared with the user
-            sql`exists (
-              select 1 from jsonb_array_elements(${healthRecords.sharedWith}) as share
-              where (share->>'username')::text = ${username}
+            // Include records explicitly shared with this user
+            sql`EXISTS (
+              SELECT 1 FROM jsonb_array_elements(${healthRecords.sharedWith}) as share
+              WHERE (share->>'username')::text = ${username}
             )`,
-            // Records with emergency access AND user is an emergency contact
+            // Include emergency-accessible records where user is an emergency contact with view permission
             and(
               eq(healthRecords.isEmergencyAccessible, true),
-              sql`exists (
-                select 1 from users
-                where exists (
-                  select 1 from jsonb_array_elements(users.emergency_contacts) as contact
-                  where (contact->>'username')::text = ${username}
-                  and (contact->>'canViewRecords')::boolean = true
+              sql`EXISTS (
+                SELECT 1 FROM users u
+                WHERE EXISTS (
+                  SELECT 1 FROM jsonb_array_elements(u.emergency_contacts) as contact
+                  WHERE (contact->>'username')::text = ${username}
+                  AND (contact->>'canViewRecords')::boolean = true
                 )
-                and users.id = ${healthRecords.userId}
+                AND u.id = ${healthRecords.userId}
               )`
             )
           )
         )
-      );
+      )
+      .orderBy(sql`${healthRecords.date} DESC`);
+
+    return query;
   }
 
   async getHealthRecord(id: number): Promise<HealthRecord | undefined> {
@@ -122,7 +126,7 @@ export class DatabaseStorage implements IStorage {
       .insert(healthRecords)
       .values({
         ...record,
-        sharedWith: record.sharedWith || [],
+        sharedWith: record.sharedWith || [], // Ensure sharedWith is initialized as an empty array
         verifiedAt: null,
         verifiedBy: null,
         signature: null,

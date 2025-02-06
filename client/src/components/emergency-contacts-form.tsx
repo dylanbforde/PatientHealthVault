@@ -51,11 +51,16 @@ export function EmergencyContactsForm({
   const handleSubmit = async (data: { contacts: EmergencyContact[] }) => {
     try {
       await onSubmit(data.contacts);
-      // Immediately invalidate queries to trigger a refresh
+
+      // Force refetch both queries to ensure widgets are updated
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["/api/user"] }),
         queryClient.invalidateQueries({ queryKey: ["/api/shared-records"] })
       ]);
+
+      // Immediately refetch user data to update widgets
+      await queryClient.fetchQuery({ queryKey: ["/api/user"] });
+
       toast({
         title: "Success",
         description: "Emergency contacts updated successfully",
