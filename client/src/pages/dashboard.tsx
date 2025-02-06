@@ -15,6 +15,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -36,6 +37,51 @@ import { type HealthRecord, insertHealthRecordSchema } from "@shared/schema";
 import { format } from "date-fns";
 import { Loader2, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
+
+function ViewRecordDialog({ record }: { record: HealthRecord }) {
+  return (
+    <DialogContent className="max-w-2xl">
+      <DialogHeader>
+        <DialogTitle>{record.title}</DialogTitle>
+        <DialogDescription>
+          Created on {format(new Date(record.date), "PPP")}
+        </DialogDescription>
+      </DialogHeader>
+      <div className="grid gap-4 py-4">
+        <div>
+          <h3 className="font-medium mb-2">Record Type</h3>
+          <p className="text-sm text-muted-foreground">{record.recordType}</p>
+        </div>
+        <div>
+          <h3 className="font-medium mb-2">Healthcare Facility</h3>
+          <p className="text-sm text-muted-foreground">{record.facility}</p>
+        </div>
+        <div>
+          <h3 className="font-medium mb-2">Record Details</h3>
+          <div className="bg-muted p-4 rounded-lg">
+            <p className="text-sm whitespace-pre-wrap">{record.content.notes}</p>
+          </div>
+        </div>
+        <div>
+          <h3 className="font-medium mb-2">Emergency Access</h3>
+          <p className="text-sm text-muted-foreground">
+            {record.isEmergencyAccessible ? "Enabled" : "Disabled"}
+          </p>
+        </div>
+        {record.verifiedAt && (
+          <div>
+            <h3 className="font-medium mb-2">Verification</h3>
+            <p className="text-sm text-muted-foreground">
+              Verified by {record.verifiedBy} on{" "}
+              {format(new Date(record.verifiedAt), "PPP")}
+            </p>
+          </div>
+        )}
+      </div>
+    </DialogContent>
+  );
+}
 
 function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
   const form = useForm({
@@ -199,6 +245,7 @@ function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
 export default function Dashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [selectedRecord, setSelectedRecord] = useState<HealthRecord | null>(null);
   const { data: records, isLoading } = useQuery<HealthRecord[]>({
     queryKey: ["/api/health-records"],
   });
@@ -335,31 +382,36 @@ export default function Dashboard() {
                 </TableHeader>
                 <TableBody>
                   {records?.map((record) => (
-                    <TableRow key={record.id}>
-                      <TableCell>
-                        {format(new Date(record.date), "PP")}
-                      </TableCell>
-                      <TableCell>{record.title}</TableCell>
-                      <TableCell>{record.facility}</TableCell>
-                      <TableCell>{record.recordType}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-2">
-                          <Switch
-                            id={`emergency-${record.id}`}
-                            checked={record.isEmergencyAccessible ?? false}
-                            onCheckedChange={(checked) =>
-                              toggleEmergencyAccess.mutate({
-                                id: record.id,
-                                isEmergencyAccessible: checked,
-                              })
-                            }
-                          />
-                          <Label htmlFor={`emergency-${record.id}`}>
-                            {record.isEmergencyAccessible ? "Enabled" : "Disabled"}
-                          </Label>
-                        </div>
-                      </TableCell>
-                    </TableRow>
+                    <Dialog key={record.id} open={selectedRecord?.id === record.id} onOpenChange={(open) => !open && setSelectedRecord(null)}>
+                      <DialogTrigger asChild>
+                        <TableRow className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedRecord(record)}>
+                          <TableCell>
+                            {format(new Date(record.date), "PP")}
+                          </TableCell>
+                          <TableCell>{record.title}</TableCell>
+                          <TableCell>{record.facility}</TableCell>
+                          <TableCell>{record.recordType}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center space-x-2" onClick={(e) => e.stopPropagation()}>
+                              <Switch
+                                id={`emergency-${record.id}`}
+                                checked={record.isEmergencyAccessible ?? false}
+                                onCheckedChange={(checked) =>
+                                  toggleEmergencyAccess.mutate({
+                                    id: record.id,
+                                    isEmergencyAccessible: checked,
+                                  })
+                                }
+                              />
+                              <Label htmlFor={`emergency-${record.id}`}>
+                                {record.isEmergencyAccessible ? "Enabled" : "Disabled"}
+                              </Label>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      </DialogTrigger>
+                      {selectedRecord && <ViewRecordDialog record={selectedRecord} />}
+                    </Dialog>
                   ))}
                 </TableBody>
               </Table>
