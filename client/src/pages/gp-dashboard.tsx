@@ -44,10 +44,18 @@ export default function GPDashboard() {
 
   const lookupForm = useForm<z.infer<typeof patientCodeSchema>>({
     resolver: zodResolver(patientCodeSchema),
+    defaultValues: {
+      patientCode: "",  // Initialize with empty string
+    },
   });
 
   const recordForm = useForm<z.infer<typeof gpHealthRecordSchema>>({
     resolver: zodResolver(gpHealthRecordSchema),
+    defaultValues: {
+      notes: "",
+      diagnosis: "",
+      treatment: "",
+    },
   });
 
   // Query to fetch patient records when a patient is selected

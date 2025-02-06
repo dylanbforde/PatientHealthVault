@@ -179,7 +179,8 @@ export class DatabaseStorage implements IStorage {
         id: r.id,
         title: r.title,
         userId: r.userId,
-        facility: r.facility
+        facility: r.facility,
+        sharedWith: r.sharedWith
       }))
     });
 
@@ -265,7 +266,7 @@ export class DatabaseStorage implements IStorage {
     const recordToCreate = {
       ...record,
       userId: patient.id, // Explicitly set to patient's ID
-      sharedWith: [{ username: patient.username }], // Share with the patient automatically
+      sharedWith: record.sharedWith || [{ username: patient.username }], // Share with the patient automatically
       verifiedAt: null,
       verifiedBy: null,
       signature: null,
