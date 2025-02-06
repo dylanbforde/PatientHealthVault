@@ -1,6 +1,7 @@
 import { users, type User, type InsertUser, type HealthRecord, type InsertHealthRecord } from "@shared/schema";
 import session from "express-session";
 import createMemoryStore from "memorystore";
+import { signRecord, verifyRecord } from "./crypto";
 
 const MemoryStore = createMemoryStore(session);
 
@@ -8,13 +9,15 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  
+  updateUserPublicKey(userId: number, publicKey: string): Promise<User>;
+
   getHealthRecords(userId: number): Promise<HealthRecord[]>;
   getHealthRecord(id: number): Promise<HealthRecord | undefined>;
   createHealthRecord(record: InsertHealthRecord): Promise<HealthRecord>;
   updateHealthRecordSharing(id: number, sharedWith: number[]): Promise<HealthRecord>;
   updateEmergencyAccess(id: number, isEmergencyAccessible: boolean): Promise<HealthRecord>;
-  
+  verifyHealthRecord(id: number, verifiedBy: string): Promise<HealthRecord>;
+
   sessionStore: session.SessionStore;
 }
 
@@ -52,6 +55,15 @@ export class MemStorage implements IStorage {
     return user;
   }
 
+  async updateUserPublicKey(userId: number, publicKey: string): Promise<User> {
+    const user = await this.getUser(userId);
+    if (!user) throw new Error("User not found");
+
+    const updatedUser = { ...user, publicKey };
+    this.users.set(userId, updatedUser);
+    return updatedUser;
+  }
+
   async getHealthRecords(userId: number): Promise<HealthRecord[]> {
     return Array.from(this.healthRecords.values()).filter(
       (record) => record.userId === userId
@@ -64,15 +76,34 @@ export class MemStorage implements IStorage {
 
   async createHealthRecord(record: InsertHealthRecord): Promise<HealthRecord> {
     const id = this.currentRecordId++;
-    const newRecord = { ...record, id } as HealthRecord;
+    const newRecord = { 
+      ...record, 
+      id,
+      verifiedAt: null,
+      verifiedBy: null,
+      signature: null
+    } as HealthRecord;
     this.healthRecords.set(id, newRecord);
     return newRecord;
+  }
+
+  async verifyHealthRecord(id: number, verifiedBy: string): Promise<HealthRecord> {
+    const record = await this.getHealthRecord(id);
+    if (!record) throw new Error("Record not found");
+
+    const updatedRecord = { 
+      ...record,
+      verifiedAt: new Date(),
+      verifiedBy
+    };
+    this.healthRecords.set(id, updatedRecord);
+    return updatedRecord;
   }
 
   async updateHealthRecordSharing(id: number, sharedWith: number[]): Promise<HealthRecord> {
     const record = this.healthRecords.get(id);
     if (!record) throw new Error("Record not found");
-    
+
     const updatedRecord = { ...record, sharedWith };
     this.healthRecords.set(id, updatedRecord);
     return updatedRecord;
@@ -81,7 +112,7 @@ export class MemStorage implements IStorage {
   async updateEmergencyAccess(id: number, isEmergencyAccessible: boolean): Promise<HealthRecord> {
     const record = this.healthRecords.get(id);
     if (!record) throw new Error("Record not found");
-    
+
     const updatedRecord = { ...record, isEmergencyAccessible };
     this.healthRecords.set(id, updatedRecord);
     return updatedRecord;
