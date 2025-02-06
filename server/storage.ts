@@ -51,31 +51,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async generateUniquePatientCode(): Promise<string> {
-    // Keep generating codes until we find a unique one
     while (true) {
-      // Generate a 6-character alphanumeric code
       const code = randomBytes(3)
         .toString('hex')
         .toUpperCase();
 
-      // Check if this code is already in use
       const existingUser = await this.getUserByPatientCode(code);
       if (!existingUser) {
         return code;
       }
     }
-  }
-
-  async updateHealthRecordStatus(
-    id: number,
-    status: "pending" | "accepted" | "rejected"
-  ): Promise<HealthRecord> {
-    const [record] = await db
-      .update(healthRecords)
-      .set({ status })
-      .where(eq(healthRecords.id, id))
-      .returning();
-    return record;
   }
 
   async getUser(id: number): Promise<User | undefined> {
@@ -91,7 +76,6 @@ export class DatabaseStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     let userToCreate = { ...insertUser };
 
-    // Only generate a patient code for non-GP users
     if (!insertUser.isGP) {
       const patientCode = await this.generateUniquePatientCode();
       userToCreate = { ...userToCreate, patientCode };
@@ -113,7 +97,6 @@ export class DatabaseStorage implements IStorage {
   async updateUser(id: number, data: Partial<User>): Promise<User> {
     console.log('Updating user with ID:', id, 'Data:', JSON.stringify(data, null, 2));
 
-    // Ensure we're setting empty arrays instead of null for array fields
     const sanitizedData = {
       ...data,
       emergencyContacts: data.emergencyContacts || [],
@@ -141,6 +124,7 @@ export class DatabaseStorage implements IStorage {
 
     console.log('User details:', {
       id: user?.id,
+      uuid: user?.uuid,
       username: user?.username,
       isGP: user?.isGP,
       patientCode: user?.patientCode
@@ -154,84 +138,14 @@ export class DatabaseStorage implements IStorage {
         .from(healthRecords)
         .where(eq(healthRecords.facility, user.fullName || ''));
     } else {
-      // For patients, get records where:
-      // 1. They are the userId (their records)
-      // 2. OR records are shared with them
+      // For patients, get records where their UUID matches
       records = await db
         .select()
         .from(healthRecords)
-        .where(
-          or(
-            eq(healthRecords.userId, userId),
-            sql`EXISTS (
-              SELECT 1 FROM jsonb_array_elements(${healthRecords.sharedWith}) as share
-              WHERE (share->>'username')::text = ${user?.username}
-            )`
-          )
-        );
+        .where(eq(healthRecords.patientUuid, user.uuid));
     }
 
-    console.log('Found records for user:', {
-      userId,
-      userIsGP: user?.isGP,
-      recordCount: records.length,
-      records: records.map(r => ({
-        id: r.id,
-        title: r.title,
-        userId: r.userId,
-        facility: r.facility,
-        sharedWith: r.sharedWith
-      }))
-    });
-
-    return records;
-  }
-
-  async getSharedRecords(username: string): Promise<HealthRecord[]> {
-    // Get the user's ID first
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(eq(users.username, username));
-
-    if (!user) {
-      return [];
-    }
-
-    // Get only records that are:
-    // 1. NOT owned by this user
-    // 2. Either explicitly shared with them or accessible via emergency contact status
-    const records = await db
-      .select()
-      .from(healthRecords)
-      .where(
-        and(
-          // Explicitly exclude records owned by this user
-          sql`${healthRecords.userId} != ${user.id}`,
-          or(
-            // Include records explicitly shared with this user
-            sql`EXISTS (
-              SELECT 1 FROM jsonb_array_elements(${healthRecords.sharedWith}) as share
-              WHERE (share->>'username')::text = ${username}
-            )`,
-            // Include emergency-accessible records where user is an emergency contact with view permission
-            and(
-              eq(healthRecords.isEmergencyAccessible, true),
-              sql`EXISTS (
-                SELECT 1 FROM users u
-                WHERE u.id = ${healthRecords.userId}
-                AND EXISTS (
-                  SELECT 1 FROM jsonb_array_elements(u.emergency_contacts) as contact
-                  WHERE (contact->>'username')::text = ${username}
-                  AND (contact->>'canViewRecords')::boolean = true
-                )
-              )`
-            )
-          )
-        )
-      )
-      .orderBy(sql`${healthRecords.date} DESC`);
-
+    console.log('Found records:', records.length);
     return records;
   }
 
@@ -246,11 +160,11 @@ export class DatabaseStorage implements IStorage {
   async createHealthRecord(record: InsertHealthRecord): Promise<HealthRecord> {
     console.log('Creating health record with data:', JSON.stringify(record, null, 2));
 
-    // Get the patient's information using the provided userId
+    // Get the patient's information using the patient code
     const [patient] = await db
       .select()
       .from(users)
-      .where(eq(users.id, record.userId));
+      .where(eq(users.uuid, record.patientUuid));
 
     if (!patient) {
       throw new Error('Patient not found');
@@ -258,15 +172,19 @@ export class DatabaseStorage implements IStorage {
 
     console.log('Creating record for patient:', {
       patientId: patient.id,
+      patientUuid: patient.uuid,
       patientName: patient.fullName,
       patientCode: patient.patientCode
     });
 
-    // Important: Always use the patient's ID for the record
     const recordToCreate = {
       ...record,
-      userId: patient.id, // Explicitly set to patient's ID
-      sharedWith: [{ username: patient.username }], // Share with the patient automatically
+      patientUuid: patient.uuid,
+      sharedWith: [{ 
+        username: patient.username,
+        accessGrantedAt: new Date(),
+        accessLevel: "view"
+      }],
       verifiedAt: null,
       verifiedBy: null,
       signature: null,
@@ -279,7 +197,7 @@ export class DatabaseStorage implements IStorage {
     try {
       const [newRecord] = await db
         .insert(healthRecords)
-        .values([recordToCreate])
+        .values(recordToCreate)
         .returning();
 
       console.log('Created health record:', JSON.stringify(newRecord, null, 2));
@@ -294,6 +212,18 @@ export class DatabaseStorage implements IStorage {
     const [record] = await db
       .update(healthRecords)
       .set({ sharedWith })
+      .where(eq(healthRecords.id, id))
+      .returning();
+    return record;
+  }
+
+  async updateHealthRecordStatus(
+    id: number,
+    status: "pending" | "accepted" | "rejected"
+  ): Promise<HealthRecord> {
+    const [record] = await db
+      .update(healthRecords)
+      .set({ status })
       .where(eq(healthRecords.id, id))
       .returning();
     return record;
@@ -318,6 +248,48 @@ export class DatabaseStorage implements IStorage {
       .where(eq(healthRecords.id, id))
       .returning();
     return record;
+  }
+
+  async getSharedRecords(username: string): Promise<HealthRecord[]> {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.username, username));
+
+    if (!user) {
+      return [];
+    }
+
+    // Get records that are shared with this user
+    const records = await db
+      .select()
+      .from(healthRecords)
+      .where(
+        or(
+          // Include records explicitly shared with this user
+          sql`EXISTS (
+            SELECT 1 FROM jsonb_array_elements(${healthRecords.sharedWith}) as share
+            WHERE (share->>'username')::text = ${username}
+            AND (share->>'accessLevel')::text = 'view'
+          )`,
+          // Include emergency-accessible records where user is an emergency contact
+          and(
+            eq(healthRecords.isEmergencyAccessible, true),
+            sql`EXISTS (
+              SELECT 1 FROM users u
+              WHERE u.uuid = ${healthRecords.patientUuid}
+              AND EXISTS (
+                SELECT 1 FROM jsonb_array_elements(u.emergency_contacts) as contact
+                WHERE (contact->>'username')::text = ${username}
+                AND (contact->>'canViewRecords')::boolean = true
+              )
+            )`
+          )
+        )
+      )
+      .orderBy(sql`${healthRecords.date} DESC`);
+
+    return records;
   }
 }
 

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, jsonb, timestamp, uuid } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -21,6 +21,7 @@ export const sharedAccessSchema = z.object({
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
+  uuid: uuid("uuid").notNull().unique().defaultRandom(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   fullName: text("full_name").notNull(),
@@ -37,7 +38,7 @@ export const users = pgTable("users", {
 
 export const healthRecords = pgTable("health_records", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  patientUuid: uuid("patient_uuid").notNull(), // Changed from userId to patientUuid
   title: text("title").notNull(),
   date: timestamp("date").notNull(),
   recordType: text("record_type").notNull(),
@@ -54,7 +55,7 @@ export const healthRecords = pgTable("health_records", {
 
 // Custom schema for health records that properly handles date
 const healthRecordSchema = z.object({
-  userId: z.number(),
+  patientUuid: z.string().uuid(), // Changed from userId to patientUuid
   title: z.string().min(1, "Title is required"),
   date: z.preprocess((arg) => {
     if (typeof arg === "string" || arg instanceof Date) return new Date(arg);
