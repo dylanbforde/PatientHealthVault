@@ -123,7 +123,7 @@ export function registerRoutes(app: Express): Server {
     const { username, accessLevel } = req.body;
 
     try {
-      // First verify the record belongs to the user
+      // Verify the record belongs to the user
       const record = await storage.getHealthRecord(recordId);
       if (!record || record.userId !== req.user.id) {
         return res.status(404).json({ message: "Record not found" });
@@ -142,10 +142,12 @@ export function registerRoutes(app: Express): Server {
         accessLevel,
       };
 
-      // Update the record's shared access
+      // Remove any existing share for this user and add the new one
       const updatedRecord = await storage.updateHealthRecordSharing(
         recordId,
-        record.sharedWith.filter(s => s.username !== username).concat(newShare)
+        record.sharedWith ? 
+          record.sharedWith.filter(s => s.username !== username).concat(newShare) :
+          [newShare]
       );
 
       res.json(updatedRecord);
@@ -165,7 +167,7 @@ export function registerRoutes(app: Express): Server {
     const { username } = req.params;
 
     try {
-      // First verify the record belongs to the user
+      // Verify the record belongs to the user
       const record = await storage.getHealthRecord(recordId);
       if (!record || record.userId !== req.user.id) {
         return res.status(404).json({ message: "Record not found" });
@@ -174,7 +176,7 @@ export function registerRoutes(app: Express): Server {
       // Remove the share for this username
       const updatedRecord = await storage.updateHealthRecordSharing(
         recordId,
-        record.sharedWith.filter(s => s.username !== username)
+        record.sharedWith ? record.sharedWith.filter(s => s.username !== username) : []
       );
 
       res.json(updatedRecord);

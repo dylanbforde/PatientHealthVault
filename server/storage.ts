@@ -1,6 +1,6 @@
 import { users, healthRecords, type User, type InsertUser, type HealthRecord, type InsertHealthRecord } from "@shared/schema";
 import { db } from "./db";
-import { eq, or, sql } from "drizzle-orm";
+import { eq, or, and, sql } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
@@ -68,22 +68,41 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  // Only return records owned by the user
   async getHealthRecords(userId: number): Promise<HealthRecord[]> {
-    return db.select().from(healthRecords).where(eq(healthRecords.userId, userId));
+    return db
+      .select()
+      .from(healthRecords)
+      .where(eq(healthRecords.userId, userId));
   }
 
+  // Get records shared with the user
   async getSharedRecords(username: string): Promise<HealthRecord[]> {
-    // Get records shared with the user directly or through emergency contacts
-    const records = await db
+    return db
       .select()
       .from(healthRecords)
       .where(
         or(
-          sql`jsonb_path_exists(${healthRecords.sharedWith}, '$[*] ? (@.username == ${username})')`,
-          eq(healthRecords.isEmergencyAccessible, true)
+          // Records explicitly shared with the user
+          sql`exists (
+            select 1 from jsonb_array_elements(${healthRecords.sharedWith}) as share
+            where (share->>'username')::text = ${username}
+          )`,
+          // Records with emergency access AND user is an emergency contact
+          and(
+            eq(healthRecords.isEmergencyAccessible, true),
+            sql`exists (
+              select 1 from users
+              where exists (
+                select 1 from jsonb_array_elements(users.emergency_contacts) as contact
+                where (contact->>'username')::text = ${username}
+                and (contact->>'canViewRecords')::boolean = true
+              )
+              and users.id = ${healthRecords.userId}
+            )`
+          )
         )
       );
-    return records;
   }
 
   async getHealthRecord(id: number): Promise<HealthRecord | undefined> {
