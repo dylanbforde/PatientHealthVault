@@ -15,7 +15,6 @@ import { type EmergencyContact, emergencyContactSchema } from "@shared/schema";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient } from "@/lib/queryClient";
 
 interface EmergencyContactsFormProps {
   contacts: EmergencyContact[];
@@ -29,6 +28,7 @@ export function EmergencyContactsForm({
   isSubmitting 
 }: EmergencyContactsFormProps) {
   const { toast } = useToast();
+
   const form = useForm({
     resolver: zodResolver(emergencyContactSchema.array()),
     defaultValues: {
@@ -50,25 +50,27 @@ export function EmergencyContactsForm({
 
   const handleSubmit = async (data: { contacts: EmergencyContact[] }) => {
     try {
-      // Validate and clean up contacts before submission
+      console.log('Form data before submission:', data.contacts);
+
+      // Clean up contacts before submission
       const cleanedContacts = data.contacts.map(contact => ({
-        ...contact,
-        email: contact.email || undefined // Remove empty email strings
+        username: contact.username.trim(),
+        name: contact.name.trim(),
+        relationship: contact.relationship.trim(),
+        phone: contact.phone.trim(),
+        email: contact.email?.trim() || undefined,
+        canViewRecords: contact.canViewRecords
       }));
 
+      console.log('Cleaned contacts data:', cleanedContacts);
       await onSubmit(cleanedContacts);
-
-      // Force an immediate refetch of user data
-      await queryClient.invalidateQueries({ queryKey: ["/api/user"] });
-
-      // Wait for the user data to be refetched
-      await queryClient.fetchQuery({ queryKey: ["/api/user"] });
 
       toast({
         title: "Success",
         description: "Emergency contacts updated successfully",
       });
     } catch (error) {
+      console.error('Error submitting emergency contacts:', error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to update contacts",

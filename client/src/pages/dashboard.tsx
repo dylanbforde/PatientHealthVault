@@ -504,7 +504,10 @@ export default function Dashboard() {
                 <h3 className="text-lg font-semibold mb-4">Emergency Contacts</h3>
                 <EmergencyContactsForm
                   contacts={user?.emergencyContacts || []}
-                  onSubmit={(contacts) => updateProfile.mutate({ emergencyContacts: contacts })}
+                  onSubmit={(contacts) => {
+                    console.log('Submitting emergency contacts:', contacts);
+                    updateProfile.mutate({ emergencyContacts: contacts });
+                  }}
                   isSubmitting={updateProfile.isPending}
                 />
               </div>
