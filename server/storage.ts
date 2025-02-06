@@ -128,6 +128,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getHealthRecords(userId: number): Promise<HealthRecord[]> {
+    console.log('Fetching health records for user:', userId);
     // Strictly only return records owned by this specific user
     const records = await db
       .select()
@@ -135,6 +136,7 @@ export class DatabaseStorage implements IStorage {
       .where(eq(healthRecords.userId, userId))
       .orderBy(sql`${healthRecords.date} DESC`);
 
+    console.log('Found records:', records);
     return records;
   }
 
@@ -195,16 +197,25 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createHealthRecord(record: InsertHealthRecord): Promise<HealthRecord> {
+    console.log('Creating health record with data:', JSON.stringify(record, null, 2));
+
+    // Ensure data is properly formatted
+    const validatedRecord = {
+      ...record,
+      sharedWith: record.sharedWith || [], // Ensure sharedWith is initialized as an empty array
+      verifiedAt: null,
+      verifiedBy: null,
+      signature: null,
+    };
+
+    console.log('Validated record data:', JSON.stringify(validatedRecord, null, 2));
+
     const [newRecord] = await db
       .insert(healthRecords)
-      .values({
-        ...record,
-        sharedWith: record.sharedWith || [], // Ensure sharedWith is initialized as an empty array
-        verifiedAt: null,
-        verifiedBy: null,
-        signature: null,
-      })
+      .values(validatedRecord)
       .returning();
+
+    console.log('Health record created:', JSON.stringify(newRecord, null, 2));
     return newRecord;
   }
 

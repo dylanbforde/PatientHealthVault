@@ -86,22 +86,31 @@ export default function GPDashboard() {
       if (!selectedPatient) throw new Error("No patient selected");
 
       const record = {
-        ...data,
         userId: selectedPatient.id,
-        status: "pending",
-        facility: user?.fullName || "Unknown GP",
-        date: new Date().toISOString(),
         title: `${data.diagnosis} - ${format(new Date(), "PP")}`,
+        date: new Date().toISOString(),
         recordType: "GP Visit",
+        facility: user?.fullName || "Unknown GP",
         content: {
           notes: data.notes,
           diagnosis: data.diagnosis,
           treatment: data.treatment
-        }
+        },
+        isEmergencyAccessible: false,
+        sharedWith: [],
+        status: "pending"
       };
 
+      console.log("Sending record data to server:", record);
       const res = await apiRequest("POST", "/api/health-records", record);
-      return res.json();
+      if (!res.ok) {
+        const errorData = await res.json();
+        console.error("Server response error:", errorData);
+        throw new Error(errorData.message || "Failed to create record");
+      }
+      const responseData = await res.json();
+      console.log("Server response success:", responseData);
+      return responseData;
     },
     onSuccess: () => {
       toast({
@@ -113,9 +122,10 @@ export default function GPDashboard() {
       queryClient.invalidateQueries({ queryKey: ["/api/health-records", selectedPatient?.id] });
     },
     onError: (error: Error) => {
+      console.error("Record creation error:", error);
       toast({
-        title: "Error",
-        description: error.message,
+        title: "Error creating record",
+        description: error.message || "Failed to create health record",
         variant: "destructive",
       });
     },
@@ -164,8 +174,8 @@ export default function GPDashboard() {
                           Enter the patient's unique code to look up their record
                         </FormDescription>
                         <FormControl>
-                          <Input 
-                            {...field} 
+                          <Input
+                            {...field}
                             placeholder="Enter patient's unique code"
                             className="font-mono"
                             disabled={lookupMutation.isPending || !!selectedPatient}
@@ -175,8 +185,8 @@ export default function GPDashboard() {
                     )}
                   />
                   {!selectedPatient && (
-                    <Button 
-                      type="submit" 
+                    <Button
+                      type="submit"
                       disabled={lookupMutation.isPending}
                       className="w-full font-mono"
                     >
@@ -225,8 +235,8 @@ export default function GPDashboard() {
                               <TableCell>
                                 <span className={`px-2 py-1 rounded-full text-xs ${
                                   record.status === "pending" ? "bg-yellow-100 text-yellow-800" :
-                                  record.status === "accepted" ? "bg-green-100 text-green-800" :
-                                  "bg-red-100 text-red-800"
+                                    record.status === "accepted" ? "bg-green-100 text-green-800" :
+                                      "bg-red-100 text-red-800"
                                 }`}>
                                   {record.status}
                                 </span>
@@ -288,8 +298,8 @@ export default function GPDashboard() {
                         />
 
                         <div className="flex gap-4">
-                          <Button 
-                            type="submit" 
+                          <Button
+                            type="submit"
                             className="flex-1"
                             disabled={createRecordMutation.isPending}
                           >
@@ -298,7 +308,7 @@ export default function GPDashboard() {
                             )}
                             Create Record
                           </Button>
-                          <Button 
+                          <Button
                             type="button"
                             variant="outline"
                             onClick={() => {
