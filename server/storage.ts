@@ -146,8 +146,8 @@ export class DatabaseStorage implements IStorage {
       patientCode: user?.patientCode
     });
 
-    // For patients, get records where they are the owner
-    // For GPs, get records they created
+    // For GPs, get records they created (where facility matches their name)
+    // For patients, get records where they are the userId
     const records = await db
       .select()
       .from(healthRecords)
@@ -163,7 +163,8 @@ export class DatabaseStorage implements IStorage {
       records: records.map(r => ({
         id: r.id,
         title: r.title,
-        userId: r.userId
+        userId: r.userId,
+        facility: r.facility
       }))
     });
 
@@ -229,7 +230,7 @@ export class DatabaseStorage implements IStorage {
   async createHealthRecord(record: InsertHealthRecord): Promise<HealthRecord> {
     console.log('Creating health record with data:', JSON.stringify(record, null, 2));
 
-    // Get the patient's information to verify the record creation
+    // Get the patient's information using the provided userId
     const [patient] = await db
       .select()
       .from(users)
@@ -241,14 +242,14 @@ export class DatabaseStorage implements IStorage {
 
     console.log('Creating record for patient:', {
       patientId: patient.id,
-      patientCode: patient.patientCode,
-      patientName: patient.fullName
+      patientName: patient.fullName,
+      patientCode: patient.patientCode
     });
 
+    // Important: Always use the patient's ID for the record
     const recordToCreate = {
       ...record,
-      // Ensure we use the patient's ID
-      userId: patient.id,
+      userId: patient.id, // Explicitly set to patient's ID
       sharedWith: record.sharedWith || [],
       verifiedAt: null,
       verifiedBy: null,
