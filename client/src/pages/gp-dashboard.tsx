@@ -89,7 +89,7 @@ export default function GPDashboard() {
       if (!selectedPatient) throw new Error("No patient selected");
 
       const record = {
-        userId: selectedPatient.id,  // Ensure we're using the selected patient's ID
+        userId: selectedPatient.id,  // Explicitly set to patient's ID
         title: `${data.diagnosis} - ${format(new Date(), "PP")}`,
         date: new Date(),
         recordType: "GP Visit",
@@ -104,16 +104,14 @@ export default function GPDashboard() {
         status: "pending"
       };
 
-      console.log("Sending record data to server:", record);
+      console.log("Creating record for patient ID:", selectedPatient.id);
       const res = await apiRequest("POST", "/api/health-records", record);
       if (!res.ok) {
         const errorData = await res.json();
         console.error("Server response error:", errorData);
         throw new Error(errorData.message || "Failed to create record");
       }
-      const responseData = await res.json();
-      console.log("Server response success:", responseData);
-      return responseData;
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/health-records", selectedPatient?.id] });

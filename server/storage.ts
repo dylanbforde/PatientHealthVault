@@ -133,11 +133,21 @@ export class DatabaseStorage implements IStorage {
   async getHealthRecords(userId: number): Promise<HealthRecord[]> {
     console.log('Fetching health records for user:', userId);
 
-    // Strictly only return records owned by this specific user
+    // Fetch records where this user is either the owner OR the record is shared with them
     const records = await db
       .select()
       .from(healthRecords)
-      .where(eq(healthRecords.userId, userId))
+      .where(
+        or(
+          eq(healthRecords.userId, userId),
+          sql`EXISTS (
+            SELECT 1 FROM jsonb_array_elements(${healthRecords.sharedWith}) as share
+            WHERE (share->>'username')::text = (
+              SELECT username FROM users WHERE id = ${userId}
+            )
+          )`
+        )
+      )
       .orderBy(sql`${healthRecords.date} DESC`);
 
     console.log('Found records:', JSON.stringify(records, null, 2));
@@ -203,11 +213,11 @@ export class DatabaseStorage implements IStorage {
   async createHealthRecord(record: InsertHealthRecord): Promise<HealthRecord> {
     console.log('Creating health record with data:', JSON.stringify(record, null, 2));
 
-    // Ensure data is properly formatted
+    // Ensure data is properly formatted and preserve the original userId
     const validatedRecord = {
       ...record,
-      userId: record.userId,  // Ensure this is explicitly set
-      sharedWith: record.sharedWith || [], // Ensure sharedWith is initialized as an empty array
+      userId: record.userId,  // Explicitly preserve the passed userId
+      sharedWith: record.sharedWith || [],
       verifiedAt: null,
       verifiedBy: null,
       signature: null,
