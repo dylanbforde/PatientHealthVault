@@ -10,8 +10,6 @@ import SharedRecords from "@/pages/shared-records";
 import { ProtectedRoute } from "./lib/protected-route";
 import { AuthProvider } from "./hooks/use-auth";
 import { AnimatePresence } from "framer-motion";
-import { useState, useEffect } from "react";
-import { BootSequence } from "@/components/boot-sequence";
 
 function Router() {
   const [location] = useLocation();
@@ -30,34 +28,11 @@ function Router() {
 }
 
 function App() {
-  const [showBootSequence, setShowBootSequence] = useState(true);
-  const [hasBooted, setHasBooted] = useState(false);
-
-  // Only show boot sequence on first load
-  useEffect(() => {
-    const hasBootedBefore = sessionStorage.getItem('hasBooted');
-    if (hasBootedBefore) {
-      setShowBootSequence(false);
-      setHasBooted(true);
-    } else {
-      sessionStorage.setItem('hasBooted', 'true');
-    }
-  }, []);
-
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        {showBootSequence && !hasBooted ? (
-          <BootSequence onComplete={() => {
-            setShowBootSequence(false);
-            setHasBooted(true);
-          }} />
-        ) : (
-          <>
-            <Router />
-            <Toaster />
-          </>
-        )}
+        <Router />
+        <Toaster />
       </AuthProvider>
     </QueryClientProvider>
   );
