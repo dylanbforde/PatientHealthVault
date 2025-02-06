@@ -116,13 +116,12 @@ export default function GPDashboard() {
       return responseData;
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/health-records", selectedPatient?.id] });
       toast({
         title: "Success",
         description: "Record created and shared with patient for review.",
       });
       recordForm.reset();
-      // Invalidate the patient records query to refresh the list
-      queryClient.invalidateQueries({ queryKey: ["/api/health-records", selectedPatient?.id] });
     },
     onError: (error: Error) => {
       console.error("Record creation error:", error);
