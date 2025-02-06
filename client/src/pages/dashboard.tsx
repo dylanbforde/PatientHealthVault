@@ -38,8 +38,9 @@ import { format } from "date-fns";
 import { Loader2, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Import Tabs component
 
-function ViewRecordDialog({ record }: { record: HealthRecord }) {
+export function ViewRecordDialog({ record }: { record: HealthRecord }) {
   return (
     <DialogContent className="max-w-2xl">
       <DialogHeader>
@@ -370,51 +371,65 @@ export default function Dashboard() {
               </Dialog>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Facility</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Emergency Access</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {records?.map((record) => (
-                    <Dialog key={record.id} open={selectedRecord?.id === record.id} onOpenChange={(open) => !open && setSelectedRecord(null)}>
-                      <DialogTrigger asChild>
-                        <TableRow className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedRecord(record)}>
-                          <TableCell>
-                            {format(new Date(record.date), "PP")}
-                          </TableCell>
-                          <TableCell>{record.title}</TableCell>
-                          <TableCell>{record.facility}</TableCell>
-                          <TableCell>{record.recordType}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center space-x-2" onClick={(e) => e.stopPropagation()}>
-                              <Switch
-                                id={`emergency-${record.id}`}
-                                checked={record.isEmergencyAccessible ?? false}
-                                onCheckedChange={(checked) =>
-                                  toggleEmergencyAccess.mutate({
-                                    id: record.id,
-                                    isEmergencyAccessible: checked,
-                                  })
-                                }
-                              />
-                              <Label htmlFor={`emergency-${record.id}`}>
-                                {record.isEmergencyAccessible ? "Enabled" : "Disabled"}
-                              </Label>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      </DialogTrigger>
-                      {selectedRecord && <ViewRecordDialog record={selectedRecord} />}
-                    </Dialog>
-                  ))}
-                </TableBody>
-              </Table>
+              <Tabs defaultValue="table">
+                <TabsList className="mb-4">
+                  <TabsTrigger value="table">Table View</TabsTrigger>
+                  <TabsTrigger value="timeline">Timeline View</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="table">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Title</TableHead>
+                        <TableHead>Facility</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Emergency Access</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {records?.map((record) => (
+                        <Dialog key={record.id} open={selectedRecord?.id === record.id} onOpenChange={(open) => !open && setSelectedRecord(null)}>
+                          <DialogTrigger asChild>
+                            <TableRow className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedRecord(record)}>
+                              <TableCell>
+                                {format(new Date(record.date), "PP")}
+                              </TableCell>
+                              <TableCell>{record.title}</TableCell>
+                              <TableCell>{record.facility}</TableCell>
+                              <TableCell>{record.recordType}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center space-x-2" onClick={(e) => e.stopPropagation()}>
+                                  <Switch
+                                    id={`emergency-${record.id}`}
+                                    checked={record.isEmergencyAccessible ?? false}
+                                    onCheckedChange={(checked) =>
+                                      toggleEmergencyAccess.mutate({
+                                        id: record.id,
+                                        isEmergencyAccessible: checked,
+                                      })
+                                    }
+                                  />
+                                  <Label htmlFor={`emergency-${record.id}`}>
+                                    {record.isEmergencyAccessible ? "Enabled" : "Disabled"}
+                                  </Label>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          </DialogTrigger>
+                          {selectedRecord && <ViewRecordDialog record={selectedRecord} />}
+                        </Dialog>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TabsContent>
+
+                <TabsContent value="timeline">
+                  {/* Placeholder for Timeline component - needs implementation */}
+                  <div>Timeline View will go here</div>
+                </TabsContent>
+              </Tabs>
             </CardContent>
           </Card>
         </div>
