@@ -41,7 +41,7 @@ export function LogoText() {
   return (
     <div className="flex items-center gap-2">
       <Logo />
-      <span className="font-semibold text-lg bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+      <span className="font-bold text-lg text-primary">
         HealthVault
       </span>
     </div>
