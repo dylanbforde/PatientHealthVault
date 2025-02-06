@@ -1,9 +1,12 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useAuth } from "@/hooks/use-auth";
+import { useQuery } from "@tanstack/react-query";
 import { Phone } from "lucide-react";
+import type { User } from "@shared/schema";
 
 export function EmergencyContactWidget() {
-  const { user } = useAuth();
+  const { data: user } = useQuery<User>({
+    queryKey: ["/api/user"],
+  });
 
   return (
     <Card>

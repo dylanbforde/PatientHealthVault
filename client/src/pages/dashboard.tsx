@@ -52,6 +52,7 @@ import { insertUserSchema } from "@shared/schema";
 import type { InsertUser } from "@shared/schema";
 import { EmergencyContactsForm } from "@/components/emergency-contacts-form";
 import { SharedRecordsView } from "@/components/shared-records-view";
+import { NavBar } from "@/components/nav-bar";
 
 
 export function ViewRecordDialog({ record }: { record: HealthRecord }) {
@@ -137,7 +138,6 @@ function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
         onSubmit={form.handleSubmit((data) => {
           try {
             console.log("Form data before submission:", data);
-            // Ensure date is a Date object
             const formattedData = {
               ...data,
               date: data.date instanceof Date ? data.date : new Date(data.date),
@@ -184,7 +184,7 @@ function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
                   }
                   onChange={(e) => {
                     const date = new Date(e.target.value);
-                    date.setHours(12); // Set to noon to avoid timezone issues
+                    date.setHours(12); 
                     field.onChange(date);
                   }}
                 />
@@ -272,7 +272,6 @@ function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
           )}
         </Button>
 
-        {/* Display any form-level errors */}
         {Object.keys(form.formState.errors).length > 0 && (
           <div className="text-sm text-red-500 mt-2">
             Please fix the errors above and try again.
@@ -372,7 +371,7 @@ export default function Dashboard() {
       insertUserSchema.pick({
         bloodType: true,
         allergies: true,
-        gpUsername: true, // Added gpUsername
+        gpUsername: true, 
         gpName: true,
         gpContact: true,
       })
@@ -380,7 +379,7 @@ export default function Dashboard() {
     defaultValues: {
       bloodType: user?.bloodType || "",
       allergies: user?.allergies || [],
-      gpUsername: user?.gpUsername || "", // Added gpUsername
+      gpUsername: user?.gpUsername || "", 
       gpName: user?.gpName || "",
       gpContact: user?.gpContact || "",
     },
@@ -396,12 +395,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b">
-        <div className="container mx-auto px-4 py-4">
-          <h1 className="text-2xl font-bold">Health Records Dashboard</h1>
-        </div>
-      </header>
-
+      <NavBar />
       <main className="container mx-auto px-4 py-8">
         <div className="grid gap-6">
           <DashboardWidgets />
