@@ -15,6 +15,7 @@ import { type EmergencyContact, emergencyContactSchema } from "@shared/schema";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { z } from "zod";
 
 interface EmergencyContactsFormProps {
   contacts: EmergencyContact[];
@@ -30,15 +31,17 @@ export function EmergencyContactsForm({
   const { toast } = useToast();
 
   const form = useForm({
-    resolver: zodResolver(emergencyContactSchema.array()),
+    resolver: zodResolver(z.object({
+      contacts: emergencyContactSchema.array()
+    })),
     defaultValues: {
-      contacts: contacts.length ? contacts : [{ 
+      contacts: contacts?.length > 0 ? contacts : [{
         username: "",
-        name: "", 
-        relationship: "", 
-        phone: "", 
+        name: "",
+        relationship: "",
+        phone: "",
         email: "",
-        canViewRecords: false 
+        canViewRecords: false
       }]
     }
   });
@@ -54,12 +57,12 @@ export function EmergencyContactsForm({
 
       // Clean up contacts before submission
       const cleanedContacts = data.contacts.map(contact => ({
-        username: contact.username.trim(),
-        name: contact.name.trim(),
-        relationship: contact.relationship.trim(),
-        phone: contact.phone.trim(),
+        username: contact.username,
+        name: contact.name,
+        relationship: contact.relationship,
+        phone: contact.phone,
         email: contact.email?.trim() || undefined,
-        canViewRecords: contact.canViewRecords
+        canViewRecords: Boolean(contact.canViewRecords)
       }));
 
       console.log('Cleaned contacts data:', cleanedContacts);
@@ -192,13 +195,13 @@ export function EmergencyContactsForm({
           <Button
             type="button"
             variant="outline"
-            onClick={() => append({ 
+            onClick={() => append({
               username: "",
-              name: "", 
-              relationship: "", 
-              phone: "", 
+              name: "",
+              relationship: "",
+              phone: "",
               email: "",
-              canViewRecords: false 
+              canViewRecords: false
             })}
           >
             <Plus className="h-4 w-4 mr-2" />
