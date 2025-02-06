@@ -194,6 +194,29 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Add back the emergency access endpoint
+  app.put("/api/health-records/:id/emergency-access", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    const recordId = parseInt(req.params.id);
+    const { isEmergencyAccessible } = req.body;
+
+    try {
+      const record = await storage.getHealthRecord(recordId);
+      if (!record || record.userId !== req.user.id) {
+        return res.status(404).json({ message: "Record not found" });
+      }
+
+      const updatedRecord = await storage.updateEmergencyAccess(recordId, isEmergencyAccessible);
+      res.json(updatedRecord);
+    } catch (err) {
+      console.error('Error updating emergency access:', err);
+      res.status(500).json({ 
+        message: "Failed to update emergency access",
+        error: err instanceof Error ? err.message : "Unknown error" 
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

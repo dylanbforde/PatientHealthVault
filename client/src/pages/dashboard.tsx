@@ -370,18 +370,16 @@ export default function Dashboard() {
     resolver: zodResolver(
       insertUserSchema.pick({
         bloodType: true,
-        emergencyContact: true,
         allergies: true,
         gpName: true,
-        gpContact: true, // Added GP fields
+        gpContact: true,
       })
     ),
     defaultValues: {
       bloodType: user?.bloodType || "",
-      emergencyContact: user?.emergencyContact || "",
       allergies: user?.allergies || [],
-      gpName: user?.gpName || "", // Added GP default values
-      gpContact: user?.gpContact || "", // Added GP default values
+      gpName: user?.gpName || "",
+      gpContact: user?.gpContact || "",
     },
   });
 
@@ -453,23 +451,6 @@ export default function Dashboard() {
                       )}
                     />
 
-                    <FormField
-                      control={form.control}
-                      name="emergencyContact"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Emergency Contact</FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              placeholder="Phone number or contact information"
-                              value={field.value || ""}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
 
                     <FormField
                       control={form.control}
