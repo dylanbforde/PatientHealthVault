@@ -195,6 +195,14 @@ export function registerRoutes(app: Express): Server {
 
     try {
       const { bloodType, emergencyContacts, allergies, gpUsername, gpName, gpContact } = req.body;
+      console.log('Updating user with data:', JSON.stringify({
+        bloodType,
+        emergencyContacts,
+        allergies,
+        gpUsername,
+        gpName,
+        gpContact
+      }, null, 2));
 
       // Validate emergency contacts if provided
       if (emergencyContacts) {
@@ -209,16 +217,17 @@ export function registerRoutes(app: Express): Server {
         }
       }
 
-      // Update only the allowed fields
+      // Update user with the provided fields
       const updatedUser = await storage.updateUser(req.user.id, {
-        bloodType,
-        emergencyContacts,
-        allergies,
-        gpUsername,
-        gpName,
-        gpContact
+        ...(bloodType !== undefined && { bloodType }),
+        ...(emergencyContacts !== undefined && { emergencyContacts }),
+        ...(allergies !== undefined && { allergies }),
+        ...(gpUsername !== undefined && { gpUsername }),
+        ...(gpName !== undefined && { gpName }),
+        ...(gpContact !== undefined && { gpContact })
       });
 
+      console.log('Updated user:', JSON.stringify(updatedUser, null, 2));
       res.json(updatedUser);
     } catch (err) {
       console.error('Error updating user:', err);
