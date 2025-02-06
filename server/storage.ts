@@ -276,13 +276,18 @@ export class DatabaseStorage implements IStorage {
 
     console.log('Final record data:', JSON.stringify(recordToCreate, null, 2));
 
-    const [newRecord] = await db
-      .insert(healthRecords)
-      .values(recordToCreate)
-      .returning();
+    try {
+      const [newRecord] = await db
+        .insert(healthRecords)
+        .values([recordToCreate])
+        .returning();
 
-    console.log('Created health record:', JSON.stringify(newRecord, null, 2));
-    return newRecord;
+      console.log('Created health record:', JSON.stringify(newRecord, null, 2));
+      return newRecord;
+    } catch (error) {
+      console.error('Error creating health record:', error);
+      throw error;
+    }
   }
 
   async updateHealthRecordSharing(id: number, sharedWith: any[]): Promise<HealthRecord> {
