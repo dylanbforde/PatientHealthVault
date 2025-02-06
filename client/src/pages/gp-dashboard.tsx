@@ -90,11 +90,12 @@ export default function GPDashboard() {
 
       console.log("Creating record for patient:", {
         patientId: selectedPatient.id,
-        patientName: selectedPatient.fullName
+        patientName: selectedPatient.fullName,
+        gpName: user?.fullName
       });
 
       const record = {
-        userId: selectedPatient.id,  // Explicitly set to patient's ID
+        userId: selectedPatient.id,
         title: `${data.diagnosis} - ${format(new Date(), "PP")}`,
         date: new Date(),
         recordType: "GP Visit",
