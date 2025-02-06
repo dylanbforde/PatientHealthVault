@@ -15,6 +15,16 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Loader2, FileUp, Stethoscope } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { format } from "date-fns";
 
 const patientCodeSchema = z.object({
   patientCode: z.string().min(1, "Patient code is required"),
@@ -38,6 +48,16 @@ export default function GPDashboard() {
 
   const recordForm = useForm<z.infer<typeof gpHealthRecordSchema>>({
     resolver: zodResolver(gpHealthRecordSchema),
+  });
+
+  // Query to fetch patient records when a patient is selected
+  const { data: patientRecords } = useQuery({
+    queryKey: ["/api/health-records", selectedPatient?.id],
+    enabled: !!selectedPatient,
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/health-records?userId=${selectedPatient!.id}`);
+      return res.json();
+    },
   });
 
   const lookupMutation = useMutation({
@@ -71,6 +91,13 @@ export default function GPDashboard() {
         status: "pending",
         facility: user?.fullName || "Unknown GP",
         date: new Date().toISOString(),
+        title: `${data.diagnosis} - ${format(new Date(), "PP")}`,
+        recordType: "GP Visit",
+        content: {
+          notes: data.notes,
+          diagnosis: data.diagnosis,
+          treatment: data.treatment
+        }
       };
 
       const res = await apiRequest("POST", "/api/health-records", record);
@@ -82,6 +109,8 @@ export default function GPDashboard() {
         description: "Record created and shared with patient for review.",
       });
       recordForm.reset();
+      // Invalidate the patient records query to refresh the list
+      queryClient.invalidateQueries({ queryKey: ["/api/health-records", selectedPatient?.id] });
     },
     onError: (error: Error) => {
       toast({
@@ -160,88 +189,131 @@ export default function GPDashboard() {
             </CardContent>
           </Card>
 
-          {/* Record Creation Card */}
+          {/* Patient Records and Creation Tabs */}
           {selectedPatient && (
             <Card>
               <CardHeader>
                 <CardTitle className="font-mono tracking-wider uppercase flex items-center gap-2">
                   <FileUp className="h-4 w-4 text-primary" />
-                  Create Medical Record
+                  Patient Records - {selectedPatient.fullName}
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="mb-6 p-4 border border-primary/20 rounded-lg bg-muted/50">
-                  <p className="font-mono text-sm">
-                    Creating record for: <span className="text-primary">{selectedPatient.fullName}</span>
-                  </p>
-                </div>
+                <Tabs defaultValue="records" className="space-y-4">
+                  <TabsList>
+                    <TabsTrigger value="records">View Records</TabsTrigger>
+                    <TabsTrigger value="create">Create New Record</TabsTrigger>
+                  </TabsList>
 
-                <Form {...recordForm}>
-                  <form onSubmit={recordForm.handleSubmit((data) => createRecordMutation.mutate(data))} className="space-y-4">
-                    <FormField
-                      control={recordForm.control}
-                      name="notes"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Medical Notes</FormLabel>
-                          <FormControl>
-                            <Textarea {...field} placeholder="Enter detailed medical notes" />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={recordForm.control}
-                      name="diagnosis"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Diagnosis</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="Enter diagnosis" />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={recordForm.control}
-                      name="treatment"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Treatment Plan</FormLabel>
-                          <FormControl>
-                            <Textarea {...field} placeholder="Enter treatment plan" />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-
-                    <div className="flex gap-4">
-                      <Button 
-                        type="submit" 
-                        className="flex-1"
-                        disabled={createRecordMutation.isPending}
-                      >
-                        {createRecordMutation.isPending && (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        )}
-                        Create Record
-                      </Button>
-                      <Button 
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          setSelectedPatient(null);
-                          lookupForm.reset();
-                          recordForm.reset();
-                        }}
-                      >
-                        Clear Form
-                      </Button>
+                  <TabsContent value="records">
+                    <div className="rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Title</TableHead>
+                            <TableHead>Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {patientRecords?.map((record) => (
+                            <TableRow key={record.id}>
+                              <TableCell>{format(new Date(record.date), "PP")}</TableCell>
+                              <TableCell>{record.recordType}</TableCell>
+                              <TableCell>{record.title}</TableCell>
+                              <TableCell>
+                                <span className={`px-2 py-1 rounded-full text-xs ${
+                                  record.status === "pending" ? "bg-yellow-100 text-yellow-800" :
+                                  record.status === "accepted" ? "bg-green-100 text-green-800" :
+                                  "bg-red-100 text-red-800"
+                                }`}>
+                                  {record.status}
+                                </span>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {(!patientRecords || patientRecords.length === 0) && (
+                            <TableRow>
+                              <TableCell colSpan={4} className="text-center text-muted-foreground">
+                                No records found
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
                     </div>
-                  </form>
-                </Form>
+                  </TabsContent>
+
+                  <TabsContent value="create">
+                    <Form {...recordForm}>
+                      <form onSubmit={recordForm.handleSubmit((data) => createRecordMutation.mutate(data))} className="space-y-4">
+                        <FormField
+                          control={recordForm.control}
+                          name="notes"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Medical Notes</FormLabel>
+                              <FormControl>
+                                <Textarea {...field} placeholder="Enter detailed medical notes" />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={recordForm.control}
+                          name="diagnosis"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Diagnosis</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Enter diagnosis" />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={recordForm.control}
+                          name="treatment"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Treatment Plan</FormLabel>
+                              <FormControl>
+                                <Textarea {...field} placeholder="Enter treatment plan" />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+
+                        <div className="flex gap-4">
+                          <Button 
+                            type="submit" 
+                            className="flex-1"
+                            disabled={createRecordMutation.isPending}
+                          >
+                            {createRecordMutation.isPending && (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            )}
+                            Create Record
+                          </Button>
+                          <Button 
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedPatient(null);
+                              lookupForm.reset();
+                              recordForm.reset();
+                            }}
+                          >
+                            Clear Form
+                          </Button>
+                        </div>
+                      </form>
+                    </Form>
+                  </TabsContent>
+                </Tabs>
               </CardContent>
             </Card>
           )}
