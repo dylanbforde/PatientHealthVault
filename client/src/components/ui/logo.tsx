@@ -41,8 +41,8 @@ export function LogoText() {
   return (
     <div className="flex items-center gap-2">
       <Logo />
-      <span className="font-bold text-lg text-primary">
-        HealthVault
+      <span className="font-mono text-lg tracking-wider text-primary uppercase">
+        Health<span className="font-bold">Vault</span>
       </span>
     </div>
   );

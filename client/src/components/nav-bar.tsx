@@ -19,14 +19,14 @@ export function NavBar() {
           <nav className="flex gap-6">
             <Link 
               href="/dashboard" 
-              className="flex items-center gap-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
+              className="flex items-center gap-2 text-sm font-mono text-muted-foreground hover:text-primary transition-colors uppercase tracking-wider"
             >
               <Layout className="h-4 w-4" />
               Dashboard
             </Link>
             <Link 
               href="/shared" 
-              className="flex items-center gap-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
+              className="flex items-center gap-2 text-sm font-mono text-muted-foreground hover:text-primary transition-colors uppercase tracking-wider"
             >
               <FileText className="h-4 w-4" />
               Shared Records
@@ -34,7 +34,7 @@ export function NavBar() {
           </nav>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-sm font-medium text-foreground">
+          <span className="text-sm font-mono text-muted-foreground uppercase tracking-wider">
             {user.username}
           </span>
           <Button
@@ -42,7 +42,7 @@ export function NavBar() {
             size="sm"
             onClick={() => logoutMutation.mutate()}
             disabled={logoutMutation.isPending}
-            className="text-foreground hover:text-primary hover:bg-background"
+            className="font-mono text-muted-foreground hover:text-primary hover:bg-background uppercase tracking-wider"
           >
             <LogOut className="h-4 w-4 mr-2" />
             Logout
