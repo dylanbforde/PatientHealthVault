@@ -29,13 +29,17 @@ export function registerRoutes(app: Express): Server {
   app.post("/api/health-records", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
+      console.log('Creating health record with data:', req.body);
+
       const recordData = insertHealthRecordSchema.parse({
         ...req.body,
         userId: req.user.id,
+        sharedWith: req.body.sharedWith || [], // Ensure sharedWith is always an array
       });
 
       // Create record first
       const record = await storage.createHealthRecord(recordData);
+      console.log('Health record created:', record);
 
       // If a signature is provided, verify it
       if (req.body.signature && req.user.publicKey) {
@@ -49,10 +53,17 @@ export function registerRoutes(app: Express): Server {
 
       res.status(201).json(record);
     } catch (err) {
+      console.error('Error creating health record:', err);
       if (err instanceof ZodError) {
-        res.status(400).json(err.errors);
+        res.status(400).json({
+          message: "Validation error",
+          errors: err.errors
+        });
       } else {
-        res.status(500).json({ message: "Internal server error" });
+        res.status(500).json({ 
+          message: "Internal server error",
+          error: err instanceof Error ? err.message : "Unknown error" 
+        });
       }
     }
   });

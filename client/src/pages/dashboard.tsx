@@ -47,7 +47,7 @@ export default function Dashboard() {
   const createRecord = useMutation({
     mutationFn: async (data: any) => {
       const res = await apiRequest("POST", "/api/health-records", data);
-      return res.json();
+      return await res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/health-records"] });
@@ -57,6 +57,7 @@ export default function Dashboard() {
       });
     },
     onError: (error: Error) => {
+      console.error('Record creation error:', error);
       toast({
         title: "Error creating record",
         description: error.message,
@@ -208,18 +209,23 @@ function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
       facility: "",
       content: { notes: "" },
       isEmergencyAccessible: false,
+      sharedWith: [], // Add default empty array for sharedWith
     },
   });
 
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit((data) => {
-        // Convert form data date string to Date object
-        const formattedData = {
-          ...data,
-          date: new Date(data.date),
-        };
-        onSubmit(formattedData);
+        try {
+          // Convert form data date string to Date object
+          const formattedData = {
+            ...data,
+            date: new Date(data.date),
+          };
+          onSubmit(formattedData);
+        } catch (error) {
+          console.error('Form submission error:', error);
+        }
       })} className="space-y-4">
         <FormField
           control={form.control}
@@ -242,8 +248,8 @@ function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
             <FormItem>
               <FormLabel>Date</FormLabel>
               <FormControl>
-                <Input 
-                  type="date" 
+                <Input
+                  type="date"
                   {...field}
                   value={field.value instanceof Date ? field.value.toISOString().split('T')[0] : ''}
                   onChange={(e) => field.onChange(new Date(e.target.value))}
@@ -289,7 +295,7 @@ function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
             <FormItem>
               <FormLabel>Record Details</FormLabel>
               <FormControl>
-                <Textarea 
+                <Textarea
                   placeholder="Enter record details"
                   value={field.value.notes || ""}
                   onChange={(e) => field.onChange({ notes: e.target.value })}
