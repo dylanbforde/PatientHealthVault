@@ -56,15 +56,15 @@ function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
       <form onSubmit={form.handleSubmit((data) => {
         try {
           console.log('Form data before submission:', data);
+          // Ensure date is a Date object
           const formattedData = {
             ...data,
-            date: new Date(data.date),
+            date: data.date instanceof Date ? data.date : new Date(data.date),
           };
           console.log('Formatted data:', formattedData);
           onSubmit(formattedData);
         } catch (error) {
           console.error('Form submission error:', error);
-          // Show validation errors if any
           if (form.formState.errors) {
             console.log('Form validation errors:', form.formState.errors);
           }
@@ -95,7 +95,11 @@ function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
                   type="date"
                   {...field}
                   value={field.value instanceof Date ? field.value.toISOString().split('T')[0] : ''}
-                  onChange={(e) => field.onChange(new Date(e.target.value))}
+                  onChange={(e) => {
+                    const date = new Date(e.target.value);
+                    date.setHours(12); // Set to noon to avoid timezone issues
+                    field.onChange(date);
+                  }}
                 />
               </FormControl>
               <FormMessage />

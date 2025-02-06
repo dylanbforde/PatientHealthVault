@@ -10,7 +10,7 @@ export const users = pgTable("users", {
   emergencyContact: text("emergency_contact"),
   bloodType: text("blood_type"),
   allergies: text("allergies").array(),
-  publicKey: text("public_key"), // Added for crypto verification
+  publicKey: text("public_key"),
 });
 
 export const healthRecords = pgTable("health_records", {
@@ -23,9 +23,29 @@ export const healthRecords = pgTable("health_records", {
   facility: text("facility").notNull(),
   sharedWith: integer("shared_with").array(),
   isEmergencyAccessible: boolean("is_emergency_accessible").default(false),
-  signature: text("signature"), // Digital signature of the record
-  verifiedAt: timestamp("verified_at"), // When the record was last verified
-  verifiedBy: text("verified_by"), // Who verified the record (e.g., hospital name)
+  signature: text("signature"),
+  verifiedAt: timestamp("verified_at"),
+  verifiedBy: text("verified_by"),
+});
+
+// Custom schema for health records that properly handles date
+const healthRecordInsertSchema = z.object({
+  userId: z.number(),
+  title: z.string().min(1, "Title is required"),
+  date: z.preprocess((arg) => {
+    if (typeof arg === "string" || arg instanceof Date) return new Date(arg);
+    return arg;
+  }, z.date()),
+  recordType: z.string().min(1, "Record type is required"),
+  content: z.object({
+    notes: z.string()
+  }).or(z.record(z.unknown())),
+  facility: z.string().min(1, "Facility is required"),
+  sharedWith: z.array(z.number()).default([]),
+  isEmergencyAccessible: z.boolean().default(false),
+  signature: z.string().nullable().optional(),
+  verifiedAt: z.date().nullable().optional(),
+  verifiedBy: z.string().nullable().optional(),
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({
@@ -38,9 +58,7 @@ export const insertUserSchema = createInsertSchema(users).pick({
   publicKey: true,
 });
 
-export const insertHealthRecordSchema = createInsertSchema(healthRecords).omit({
-  id: true,
-});
+export const insertHealthRecordSchema = healthRecordInsertSchema;
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
