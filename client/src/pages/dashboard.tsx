@@ -39,6 +39,7 @@ import { Loader2, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Import Tabs component
+import { Timeline } from "@/components/timeline";
 
 export function ViewRecordDialog({ record }: { record: HealthRecord }) {
   return (
@@ -426,8 +427,7 @@ export default function Dashboard() {
                 </TabsContent>
 
                 <TabsContent value="timeline">
-                  {/* Placeholder for Timeline component - needs implementation */}
-                  <div>Timeline View will go here</div>
+                  {records && <Timeline records={records} />}
                 </TabsContent>
               </Tabs>
             </CardContent>
