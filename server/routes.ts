@@ -74,6 +74,22 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Add this route after the existing /api/health-records route
+  app.get("/api/shared-records", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const records = await storage.getSharedRecords(req.user.username);
+      res.json(records);
+    } catch (err) {
+      console.error('Error fetching shared records:', err);
+      res.status(500).json({ 
+        message: "Failed to fetch shared records",
+        error: err instanceof Error ? err.message : "Unknown error" 
+      });
+    }
+  });
+
   // Verify a health record
   app.post("/api/health-records/:id/verify", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
@@ -171,17 +187,34 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Update the existing emergency contacts endpoint in the updateUser route
   app.patch("/api/user", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 
     try {
-      const { bloodType, emergencyContact, allergies } = req.body;
+      const { bloodType, emergencyContacts, allergies, gpUsername, gpName, gpContact } = req.body;
+
+      // Validate emergency contacts if provided
+      if (emergencyContacts) {
+        for (const contact of emergencyContacts) {
+          const targetUser = await storage.getUserByUsername(contact.username);
+          if (!targetUser) {
+            return res.status(400).json({ 
+              message: `User not found: ${contact.username}`,
+              field: "emergencyContacts"
+            });
+          }
+        }
+      }
 
       // Update only the allowed fields
       const updatedUser = await storage.updateUser(req.user.id, {
         bloodType,
-        emergencyContact,
+        emergencyContacts,
         allergies,
+        gpUsername,
+        gpName,
+        gpContact
       });
 
       res.json(updatedUser);

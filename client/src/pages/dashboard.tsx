@@ -51,6 +51,7 @@ import { DashboardWidgets } from "@/components/dashboard-widgets";
 import { insertUserSchema } from "@shared/schema";
 import type { InsertUser } from "@shared/schema";
 import { EmergencyContactsForm } from "@/components/emergency-contacts-form";
+import { SharedRecordsView } from "@/components/shared-records-view";
 
 
 export function ViewRecordDialog({ record }: { record: HealthRecord }) {
@@ -669,6 +670,16 @@ export default function Dashboard() {
               </Tabs>
             </CardContent>
           </Card>
+          {user?.emergencyContacts?.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Records Shared With You</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <SharedRecordsView />
+              </CardContent>
+            </Card>
+          )}
         </div>
       </main>
     </div>
