@@ -54,6 +54,8 @@ import { EmergencyContactsForm } from "@/components/emergency-contacts-form";
 
 
 export function ViewRecordDialog({ record }: { record: HealthRecord }) {
+  const [activeTab, setActiveTab] = useState<"details" | "sharing">("details");
+
   return (
     <DialogContent className="max-w-2xl">
       <DialogHeader>
@@ -62,37 +64,54 @@ export function ViewRecordDialog({ record }: { record: HealthRecord }) {
           Created on {format(new Date(record.date), "PPP")}
         </DialogDescription>
       </DialogHeader>
-      <div className="grid gap-4 py-4">
-        <div>
-          <h3 className="font-medium mb-2">Record Type</h3>
-          <p className="text-sm text-muted-foreground">{record.recordType}</p>
-        </div>
-        <div>
-          <h3 className="font-medium mb-2">Healthcare Facility</h3>
-          <p className="text-sm text-muted-foreground">{record.facility}</p>
-        </div>
-        <div>
-          <h3 className="font-medium mb-2">Record Details</h3>
-          <div className="bg-muted p-4 rounded-lg">
-            <p className="text-sm whitespace-pre-wrap">{record.content.notes}</p>
+
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "details" | "sharing")}>
+        <TabsList>
+          <TabsTrigger value="details">Record Details</TabsTrigger>
+          <TabsTrigger value="sharing">Sharing</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="details">
+          <div className="grid gap-4 py-4">
+            <div>
+              <h3 className="font-medium mb-2">Record Type</h3>
+              <p className="text-sm text-muted-foreground">{record.recordType}</p>
+            </div>
+            <div>
+              <h3 className="font-medium mb-2">Healthcare Facility</h3>
+              <p className="text-sm text-muted-foreground">{record.facility}</p>
+            </div>
+            <div>
+              <h3 className="font-medium mb-2">Record Details</h3>
+              <div className="bg-muted p-4 rounded-lg">
+                <p className="text-sm whitespace-pre-wrap">{record.content.notes}</p>
+              </div>
+            </div>
+            <div>
+              <h3 className="font-medium mb-2">Emergency Access</h3>
+              <p className="text-sm text-muted-foreground">
+                {record.isEmergencyAccessible ? "Enabled" : "Disabled"}
+              </p>
+            </div>
+            {record.verifiedAt && (
+              <div>
+                <h3 className="font-medium mb-2">Verification</h3>
+                <p className="text-sm text-muted-foreground">
+                  Verified by {record.verifiedBy} on{" "}
+                  {format(new Date(record.verifiedAt), "PPP")}
+                </p>
+              </div>
+            )}
           </div>
-        </div>
-        <div>
-          <h3 className="font-medium mb-2">Emergency Access</h3>
-          <p className="text-sm text-muted-foreground">
-            {record.isEmergencyAccessible ? "Enabled" : "Disabled"}
-          </p>
-        </div>
-        {record.verifiedAt && (
-          <div>
-            <h3 className="font-medium mb-2">Verification</h3>
-            <p className="text-sm text-muted-foreground">
-              Verified by {record.verifiedBy} on{" "}
-              {format(new Date(record.verifiedAt), "PPP")}
-            </p>
-          </div>
-        )}
-      </div>
+        </TabsContent>
+
+        <TabsContent value="sharing">
+          <RecordSharingForm
+            recordId={record.id}
+            sharedWith={record.sharedWith || []}
+          />
+        </TabsContent>
+      </Tabs>
     </DialogContent>
   );
 }

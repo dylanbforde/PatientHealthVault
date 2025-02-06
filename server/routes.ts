@@ -99,35 +99,78 @@ export function registerRoutes(app: Express): Server {
     res.json(verifiedRecord);
   });
 
+  // Update the record sharing endpoint
   app.put("/api/health-records/:id/share", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
+
     const recordId = parseInt(req.params.id);
-    const { sharedWith } = req.body;
+    const { username, accessLevel } = req.body;
 
-    const record = await storage.getHealthRecord(recordId);
-    if (!record || record.userId !== req.user.id) {
-      return res.sendStatus(404);
+    try {
+      // First verify the record belongs to the user
+      const record = await storage.getHealthRecord(recordId);
+      if (!record || record.userId !== req.user.id) {
+        return res.status(404).json({ message: "Record not found" });
+      }
+
+      // Find the user to share with
+      const targetUser = await storage.getUserByUsername(username);
+      if (!targetUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Add the new share
+      const newShare = {
+        username: targetUser.username,
+        accessGrantedAt: new Date(),
+        accessLevel,
+      };
+
+      // Update the record's shared access
+      const updatedRecord = await storage.updateHealthRecordSharing(
+        recordId,
+        record.sharedWith.filter(s => s.username !== username).concat(newShare)
+      );
+
+      res.json(updatedRecord);
+    } catch (err) {
+      console.error('Error sharing record:', err);
+      res.status(500).json({ 
+        message: "Failed to share record",
+        error: err instanceof Error ? err.message : "Unknown error" 
+      });
     }
-
-    const updatedRecord = await storage.updateHealthRecordSharing(recordId, sharedWith);
-    res.json(updatedRecord);
   });
 
-  app.put("/api/health-records/:id/emergency-access", async (req, res) => {
+  app.delete("/api/health-records/:id/share/:username", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
+
     const recordId = parseInt(req.params.id);
-    const { isEmergencyAccessible } = req.body;
+    const { username } = req.params;
 
-    const record = await storage.getHealthRecord(recordId);
-    if (!record || record.userId !== req.user.id) {
-      return res.sendStatus(404);
+    try {
+      // First verify the record belongs to the user
+      const record = await storage.getHealthRecord(recordId);
+      if (!record || record.userId !== req.user.id) {
+        return res.status(404).json({ message: "Record not found" });
+      }
+
+      // Remove the share for this username
+      const updatedRecord = await storage.updateHealthRecordSharing(
+        recordId,
+        record.sharedWith.filter(s => s.username !== username)
+      );
+
+      res.json(updatedRecord);
+    } catch (err) {
+      console.error('Error revoking access:', err);
+      res.status(500).json({ 
+        message: "Failed to revoke access",
+        error: err instanceof Error ? err.message : "Unknown error" 
+      });
     }
-
-    const updatedRecord = await storage.updateEmergencyAccess(recordId, isEmergencyAccessible);
-    res.json(updatedRecord);
   });
 
-  // Add this endpoint inside registerRoutes function, after the auth endpoints
   app.patch("/api/user", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 

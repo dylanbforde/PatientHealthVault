@@ -11,6 +11,13 @@ export const emergencyContactSchema = z.object({
   canViewRecords: z.boolean().default(false),
 });
 
+// Define shared record access schema
+export const sharedAccessSchema = z.object({
+  username: z.string(),
+  accessGrantedAt: z.date(),
+  accessLevel: z.enum(["view", "emergency"]),
+});
+
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
@@ -32,7 +39,7 @@ export const healthRecords = pgTable("health_records", {
   recordType: text("record_type").notNull(),
   content: jsonb("content").notNull(),
   facility: text("facility").notNull(),
-  sharedWith: integer("shared_with").array(),
+  sharedWith: jsonb("shared_with").$type<z.infer<typeof sharedAccessSchema>[]>().default([]),
   isEmergencyAccessible: boolean("is_emergency_accessible").default(false),
   signature: text("signature"),
   verifiedAt: timestamp("verified_at"),
@@ -52,7 +59,7 @@ const healthRecordSchema = z.object({
     notes: z.string()
   }).or(z.record(z.unknown())),
   facility: z.string().min(1, "Facility is required"),
-  sharedWith: z.array(z.number()).default([]),
+  sharedWith: sharedAccessSchema.array().default([]),
   isEmergencyAccessible: z.boolean().default(false),
   signature: z.string().nullable().optional(),
   verifiedAt: z.date().nullable().optional(),
@@ -73,3 +80,4 @@ export type User = typeof users.$inferSelect;
 export type HealthRecord = typeof healthRecords.$inferSelect;
 export type InsertHealthRecord = z.infer<typeof insertHealthRecordSchema>;
 export type EmergencyContact = z.infer<typeof emergencyContactSchema>;
+export type SharedAccess = z.infer<typeof sharedAccessSchema>;
