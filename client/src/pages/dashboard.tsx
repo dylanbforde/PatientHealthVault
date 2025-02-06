@@ -40,6 +40,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Import Tabs component
 import { Timeline } from "@/components/timeline";
+import { DashboardWidgets } from "@/components/dashboard-widgets";
+
 
 export function ViewRecordDialog({ record }: { record: HealthRecord }) {
   return (
@@ -319,6 +321,7 @@ export default function Dashboard() {
 
       <main className="container mx-auto px-4 py-8">
         <div className="grid gap-6">
+          <DashboardWidgets />
           <Card>
             <CardHeader>
               <CardTitle>Personal Information</CardTitle>
