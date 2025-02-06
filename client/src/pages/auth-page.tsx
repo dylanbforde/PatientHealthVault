@@ -9,18 +9,25 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { insertUserSchema } from "@shared/schema";
 import { useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
+import { useEffect } from "react";
 
 export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
   const [, setLocation] = useLocation();
 
+  useEffect(() => {
+    if (user) {
+      setLocation("/");
+    }
+  }, [user, setLocation]);
+
   if (user) {
-    setLocation("/");
     return null;
   }
 
   return (
     <div className="min-h-screen flex">
+      {/* Left column with auth forms */}
       <div className="flex-1 flex items-center justify-center p-8">
         <Tabs defaultValue="login" className="w-full max-w-md">
           <TabsList className="grid grid-cols-2">
@@ -52,13 +59,22 @@ export default function AuthPage() {
         </Tabs>
       </div>
 
+      {/* Right column with info */}
       <div className="hidden lg:flex flex-1 bg-primary items-center justify-center p-12">
         <div className="max-w-lg text-primary-foreground">
           <h1 className="text-4xl font-bold mb-6">Your Health Data, Your Control</h1>
-          <p className="text-lg opacity-90">
-            Securely manage and share your health records with healthcare providers.
-            Take control of your medical history with our privacy-focused platform.
-          </p>
+          <div className="space-y-4">
+            <p className="text-lg">
+              Take control of your medical history with our privacy-focused platform:
+            </p>
+            <ul className="list-disc list-inside space-y-2 opacity-90">
+              <li>Securely store and manage your health records</li>
+              <li>Share specific records with healthcare providers</li>
+              <li>Access your medical history anytime, anywhere</li>
+              <li>Enable emergency access for critical situations</li>
+              <li>Keep track of allergies and important health information</li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>
