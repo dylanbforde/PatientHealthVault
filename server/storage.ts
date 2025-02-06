@@ -224,10 +224,10 @@ export class DatabaseStorage implements IStorage {
     console.log('Creating health record with data:', JSON.stringify(record, null, 2));
     console.log('Creating record for userId:', record.userId);
 
-    // Ensure data is properly formatted and preserve the original userId
-    const validatedRecord = {
+    // Create a new object to avoid modifying the input
+    const recordToCreate = {
       ...record,
-      userId: record.userId,  // Explicitly preserve the passed userId
+      // Do not modify or override userId here
       sharedWith: record.sharedWith || [],
       verifiedAt: null,
       verifiedBy: null,
@@ -236,11 +236,11 @@ export class DatabaseStorage implements IStorage {
       isEmergencyAccessible: record.isEmergencyAccessible || false
     };
 
-    console.log('Validated record data:', JSON.stringify(validatedRecord, null, 2));
+    console.log('Final record data:', JSON.stringify(recordToCreate, null, 2));
 
     const [newRecord] = await db
       .insert(healthRecords)
-      .values(validatedRecord)
+      .values(recordToCreate)
       .returning();
 
     console.log('Created health record:', JSON.stringify(newRecord, null, 2));
