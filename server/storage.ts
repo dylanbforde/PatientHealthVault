@@ -10,6 +10,7 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUserPublicKey(userId: number, publicKey: string): Promise<User>;
+  updateUser(id: number, data: Partial<User>): Promise<User>;
 
   getHealthRecords(userId: number): Promise<HealthRecord[]>;
   getHealthRecord(id: number): Promise<HealthRecord | undefined>;
@@ -61,6 +62,15 @@ export class MemStorage implements IStorage {
 
     const updatedUser = { ...user, publicKey };
     this.users.set(userId, updatedUser);
+    return updatedUser;
+  }
+
+  async updateUser(id: number, data: Partial<User>): Promise<User> {
+    const user = await this.getUser(id);
+    if (!user) throw new Error("User not found");
+
+    const updatedUser = { ...user, ...data };
+    this.users.set(id, updatedUser);
     return updatedUser;
   }
 

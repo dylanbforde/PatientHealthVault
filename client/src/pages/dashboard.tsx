@@ -41,6 +41,8 @@ import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Import Tabs component
 import { Timeline } from "@/components/timeline";
 import { DashboardWidgets } from "@/components/dashboard-widgets";
+import { insertUserSchema } from "@shared/schema"; // Added import
+import type { InsertUser } from "@shared/schema"; // Added import
 
 
 export function ViewRecordDialog({ record }: { record: HealthRecord }) {
@@ -103,23 +105,26 @@ function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit((data) => {
-        try {
-          console.log('Form data before submission:', data);
-          // Ensure date is a Date object
-          const formattedData = {
-            ...data,
-            date: data.date instanceof Date ? data.date : new Date(data.date),
-          };
-          console.log('Formatted data:', formattedData);
-          onSubmit(formattedData);
-        } catch (error) {
-          console.error('Form submission error:', error);
-          if (form.formState.errors) {
-            console.log('Form validation errors:', form.formState.errors);
+      <form
+        onSubmit={form.handleSubmit((data) => {
+          try {
+            console.log("Form data before submission:", data);
+            // Ensure date is a Date object
+            const formattedData = {
+              ...data,
+              date: data.date instanceof Date ? data.date : new Date(data.date),
+            };
+            console.log("Formatted data:", formattedData);
+            onSubmit(formattedData);
+          } catch (error) {
+            console.error("Form submission error:", error);
+            if (form.formState.errors) {
+              console.log("Form validation errors:", form.formState.errors);
+            }
           }
-        }
-      })} className="space-y-4">
+        })}
+        className="space-y-4"
+      >
         <FormField
           control={form.control}
           name="title"
@@ -144,7 +149,11 @@ function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
                 <Input
                   type="date"
                   {...field}
-                  value={field.value instanceof Date ? field.value.toISOString().split('T')[0] : ''}
+                  value={
+                    field.value instanceof Date
+                      ? field.value.toISOString().split("T")[0]
+                      : ""
+                  }
                   onChange={(e) => {
                     const date = new Date(e.target.value);
                     date.setHours(12); // Set to noon to avoid timezone issues
@@ -231,7 +240,7 @@ function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
               Creating...
             </>
           ) : (
-            'Create Record'
+            "Create Record"
           )}
         </Button>
 
@@ -257,18 +266,18 @@ export default function Dashboard() {
   const createRecord = useMutation({
     mutationFn: async (data: any) => {
       try {
-        console.log('Sending record data to server:', data);
+        console.log("Sending record data to server:", data);
         const res = await apiRequest("POST", "/api/health-records", data);
         if (!res.ok) {
           const errorData = await res.json();
-          console.error('Server response error:', errorData);
-          throw new Error(errorData.message || 'Failed to create record');
+          console.error("Server response error:", errorData);
+          throw new Error(errorData.message || "Failed to create record");
         }
         const responseData = await res.json();
-        console.log('Server response success:', responseData);
+        console.log("Server response success:", responseData);
         return responseData;
       } catch (error) {
-        console.error('Record creation error:', error);
+        console.error("Record creation error:", error);
         throw error;
       }
     },
@@ -280,7 +289,7 @@ export default function Dashboard() {
       });
     },
     onError: (error: Error) => {
-      console.error('Mutation error:', error);
+      console.error("Mutation error:", error);
       toast({
         title: "Error creating record",
         description: error.message || "Failed to create health record",
@@ -290,7 +299,13 @@ export default function Dashboard() {
   });
 
   const toggleEmergencyAccess = useMutation({
-    mutationFn: async ({ id, isEmergencyAccessible }: { id: number; isEmergencyAccessible: boolean }) => {
+    mutationFn: async ({
+      id,
+      isEmergencyAccessible,
+    }: {
+      id: number;
+      isEmergencyAccessible: boolean;
+    }) => {
       const res = await apiRequest(
         "PUT",
         `/api/health-records/${id}/emergency-access`,
@@ -300,6 +315,42 @@ export default function Dashboard() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/health-records"] });
+    },
+  });
+
+  const updateProfile = useMutation({
+    mutationFn: async (data: Partial<InsertUser>) => {
+      const res = await apiRequest("PATCH", "/api/user", data);
+      return res.json();
+    },
+    onSuccess: (updatedUser) => {
+      queryClient.setQueryData(["/api/user"], updatedUser);
+      toast({
+        title: "Profile updated",
+        description: "Your profile has been updated successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error updating profile",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const form = useForm({
+    resolver: zodResolver(
+      insertUserSchema.pick({
+        bloodType: true,
+        emergencyContact: true,
+        allergies: true,
+      })
+    ),
+    defaultValues: {
+      bloodType: user?.bloodType || "",
+      emergencyContact: user?.emergencyContact || "",
+      allergies: user?.allergies || [],
     },
   });
 
@@ -327,32 +378,95 @@ export default function Dashboard() {
               <CardTitle>Personal Information</CardTitle>
             </CardHeader>
             <CardContent>
-              <dl className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <dt className="font-medium">Full Name</dt>
-                  <dd className="text-muted-foreground">{user?.fullName}</dd>
-                </div>
-                <div>
-                  <dt className="font-medium">Blood Type</dt>
-                  <dd className="text-muted-foreground">
-                    {user?.bloodType || "Not specified"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="font-medium">Emergency Contact</dt>
-                  <dd className="text-muted-foreground">
-                    {user?.emergencyContact || "Not specified"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="font-medium">Allergies</dt>
-                  <dd className="text-muted-foreground">
-                    {user?.allergies?.length
-                      ? user.allergies.join(", ")
-                      : "None specified"}
-                  </dd>
-                </div>
-              </dl>
+              <Form {...form}>
+                <form
+                  onSubmit={form.handleSubmit((data) =>
+                    updateProfile.mutate(data)
+                  )}
+                  className="space-y-4"
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label>Full Name</Label>
+                      <p className="text-muted-foreground">{user?.fullName}</p>
+                    </div>
+
+                    <FormField
+                      control={form.control}
+                      name="bloodType"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Blood Type</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              placeholder="e.g., A+, B-, O+"
+                              value={field.value || ""}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="emergencyContact"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Emergency Contact</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              placeholder="Phone number or contact information"
+                              value={field.value || ""}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="allergies"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Allergies</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              placeholder="Separate allergies with commas"
+                              value={field.value?.join(", ") || ""}
+                              onChange={(e) => {
+                                const allergies = e
+                                  .target.value
+                                  .split(",")
+                                  .map((s) => s.trim())
+                                  .filter(Boolean);
+                                field.onChange(allergies);
+                              }}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <div className="flex justify-end">
+                    <Button type="submit" disabled={updateProfile.isPending}>
+                      {updateProfile.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        "Save Changes"
+                      )}
+                    </Button>
+                  </div>
+                </form>
+              </Form>
             </CardContent>
           </Card>
 
@@ -394,9 +508,18 @@ export default function Dashboard() {
                     </TableHeader>
                     <TableBody>
                       {records?.map((record) => (
-                        <Dialog key={record.id} open={selectedRecord?.id === record.id} onOpenChange={(open) => !open && setSelectedRecord(null)}>
+                        <Dialog
+                          key={record.id}
+                          open={selectedRecord?.id === record.id}
+                          onOpenChange={(open) =>
+                            !open && setSelectedRecord(null)
+                          }
+                        >
                           <DialogTrigger asChild>
-                            <TableRow className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedRecord(record)}>
+                            <TableRow
+                              className="cursor-pointer hover:bg-muted/50"
+                              onClick={() => setSelectedRecord(record)}
+                            >
                               <TableCell>
                                 {format(new Date(record.date), "PP")}
                               </TableCell>
@@ -404,7 +527,10 @@ export default function Dashboard() {
                               <TableCell>{record.facility}</TableCell>
                               <TableCell>{record.recordType}</TableCell>
                               <TableCell>
-                                <div className="flex items-center space-x-2" onClick={(e) => e.stopPropagation()}>
+                                <div
+                                  className="flex items-center space-x-2"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
                                   <Switch
                                     id={`emergency-${record.id}`}
                                     checked={record.isEmergencyAccessible ?? false}
@@ -416,13 +542,17 @@ export default function Dashboard() {
                                     }
                                   />
                                   <Label htmlFor={`emergency-${record.id}`}>
-                                    {record.isEmergencyAccessible ? "Enabled" : "Disabled"}
+                                    {record.isEmergencyAccessible
+                                      ? "Enabled"
+                                      : "Disabled"}
                                   </Label>
                                 </div>
                               </TableCell>
                             </TableRow>
                           </DialogTrigger>
-                          {selectedRecord && <ViewRecordDialog record={selectedRecord} />}
+                          {selectedRecord && (
+                            <ViewRecordDialog record={selectedRecord} />
+                          )}
                         </Dialog>
                       ))}
                     </TableBody>

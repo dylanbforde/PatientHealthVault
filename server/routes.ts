@@ -127,6 +127,30 @@ export function registerRoutes(app: Express): Server {
     res.json(updatedRecord);
   });
 
+  // Add this endpoint inside registerRoutes function, after the auth endpoints
+  app.patch("/api/user", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const { bloodType, emergencyContact, allergies } = req.body;
+
+      // Update only the allowed fields
+      const updatedUser = await storage.updateUser(req.user.id, {
+        bloodType,
+        emergencyContact,
+        allergies,
+      });
+
+      res.json(updatedUser);
+    } catch (err) {
+      console.error('Error updating user:', err);
+      res.status(500).json({ 
+        message: "Failed to update user",
+        error: err instanceof Error ? err.message : "Unknown error" 
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
