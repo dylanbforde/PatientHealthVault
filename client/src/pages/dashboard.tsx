@@ -203,17 +203,24 @@ function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
     resolver: zodResolver(insertHealthRecordSchema),
     defaultValues: {
       title: "",
-      date: new Date().toISOString().split('T')[0],
+      date: new Date(),
       recordType: "",
       facility: "",
-      content: {},
+      content: { notes: "" },
       isEmergencyAccessible: false,
     },
   });
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={form.handleSubmit((data) => {
+        // Convert form data date string to Date object
+        const formattedData = {
+          ...data,
+          date: new Date(data.date),
+        };
+        onSubmit(formattedData);
+      })} className="space-y-4">
         <FormField
           control={form.control}
           name="title"
@@ -235,7 +242,12 @@ function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
             <FormItem>
               <FormLabel>Date</FormLabel>
               <FormControl>
-                <Input type="date" {...field} />
+                <Input 
+                  type="date" 
+                  {...field}
+                  value={field.value instanceof Date ? field.value.toISOString().split('T')[0] : ''}
+                  onChange={(e) => field.onChange(new Date(e.target.value))}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -278,20 +290,9 @@ function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
               <FormLabel>Record Details</FormLabel>
               <FormControl>
                 <Textarea 
-                  {...field} 
                   placeholder="Enter record details"
-                  onChange={(e) => {
-                    try {
-                      field.onChange(JSON.parse(e.target.value));
-                    } catch {
-                      field.onChange({ notes: e.target.value });
-                    }
-                  }}
-                  value={
-                    typeof field.value === 'object' 
-                      ? JSON.stringify(field.value, null, 2)
-                      : field.value
-                  }
+                  value={field.value.notes || ""}
+                  onChange={(e) => field.onChange({ notes: e.target.value })}
                 />
               </FormControl>
               <FormMessage />
