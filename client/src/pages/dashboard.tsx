@@ -12,15 +12,57 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { type HealthRecord } from "@shared/schema";
+import { type HealthRecord, insertHealthRecordSchema } from "@shared/schema";
 import { format } from "date-fns";
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const { data: records, isLoading } = useQuery<HealthRecord[]>({
     queryKey: ["/api/health-records"],
+  });
+
+  const createRecord = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("POST", "/api/health-records", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/health-records"] });
+      toast({
+        title: "Record created",
+        description: "Your health record has been created successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error creating record",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   const toggleEmergencyAccess = useMutation({
@@ -90,8 +132,22 @@ export default function Dashboard() {
           </Card>
 
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Health Records</CardTitle>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="h-4 w-4 mr-2" />
+                    New Record
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Add New Health Record</DialogTitle>
+                  </DialogHeader>
+                  <NewRecordForm onSubmit={(data) => createRecord.mutate(data)} />
+                </DialogContent>
+              </Dialog>
             </CardHeader>
             <CardContent>
               <Table>
@@ -117,7 +173,7 @@ export default function Dashboard() {
                         <div className="flex items-center space-x-2">
                           <Switch
                             id={`emergency-${record.id}`}
-                            checked={record.isEmergencyAccessible}
+                            checked={record.isEmergencyAccessible ?? false}
                             onCheckedChange={(checked) =>
                               toggleEmergencyAccess.mutate({
                                 id: record.id,
@@ -139,5 +195,131 @@ export default function Dashboard() {
         </div>
       </main>
     </div>
+  );
+}
+
+function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
+  const form = useForm({
+    resolver: zodResolver(insertHealthRecordSchema),
+    defaultValues: {
+      title: "",
+      date: new Date().toISOString().split('T')[0],
+      recordType: "",
+      facility: "",
+      content: {},
+      isEmergencyAccessible: false,
+    },
+  });
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="title"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Title</FormLabel>
+              <FormControl>
+                <Input {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="date"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Date</FormLabel>
+              <FormControl>
+                <Input type="date" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="recordType"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Record Type</FormLabel>
+              <FormControl>
+                <Input {...field} placeholder="e.g., Lab Test, Prescription, Visit" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="facility"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Healthcare Facility</FormLabel>
+              <FormControl>
+                <Input {...field} placeholder="Hospital or clinic name" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="content"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Record Details</FormLabel>
+              <FormControl>
+                <Textarea 
+                  {...field} 
+                  placeholder="Enter record details"
+                  onChange={(e) => {
+                    try {
+                      field.onChange(JSON.parse(e.target.value));
+                    } catch {
+                      field.onChange({ notes: e.target.value });
+                    }
+                  }}
+                  value={
+                    typeof field.value === 'object' 
+                      ? JSON.stringify(field.value, null, 2)
+                      : field.value
+                  }
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="isEmergencyAccessible"
+          render={({ field }) => (
+            <FormItem className="flex items-center gap-2">
+              <FormControl>
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              </FormControl>
+              <FormLabel>Allow Emergency Access</FormLabel>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <Button type="submit" className="w-full">
+          Create Record
+        </Button>
+      </form>
+    </Form>
   );
 }
