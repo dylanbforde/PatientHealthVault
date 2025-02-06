@@ -82,24 +82,28 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(healthRecords)
       .where(
-        or(
-          // Records explicitly shared with the user
-          sql`exists (
-            select 1 from jsonb_array_elements(${healthRecords.sharedWith}) as share
-            where (share->>'username')::text = ${username}
-          )`,
-          // Records with emergency access AND user is an emergency contact
-          and(
-            eq(healthRecords.isEmergencyAccessible, true),
+        and(
+          // Only get records NOT owned by this user
+          sql`${healthRecords.userId} != (SELECT id FROM users WHERE username = ${username})`,
+          or(
+            // Records explicitly shared with the user
             sql`exists (
-              select 1 from users
-              where exists (
-                select 1 from jsonb_array_elements(users.emergency_contacts) as contact
-                where (contact->>'username')::text = ${username}
-                and (contact->>'canViewRecords')::boolean = true
-              )
-              and users.id = ${healthRecords.userId}
-            )`
+              select 1 from jsonb_array_elements(${healthRecords.sharedWith}) as share
+              where (share->>'username')::text = ${username}
+            )`,
+            // Records with emergency access AND user is an emergency contact
+            and(
+              eq(healthRecords.isEmergencyAccessible, true),
+              sql`exists (
+                select 1 from users
+                where exists (
+                  select 1 from jsonb_array_elements(users.emergency_contacts) as contact
+                  where (contact->>'username')::text = ${username}
+                  and (contact->>'canViewRecords')::boolean = true
+                )
+                and users.id = ${healthRecords.userId}
+              )`
+            )
           )
         )
       );
