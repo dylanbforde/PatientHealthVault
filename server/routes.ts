@@ -27,19 +27,25 @@ export function registerRoutes(app: Express): Server {
   });
 
   app.post("/api/health-records", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
+    if (!req.isAuthenticated()) {
+      console.log('Unauthorized access attempt to create health record');
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
     try {
-      console.log('Creating health record with data:', req.body);
+      console.log('Creating health record with data:', JSON.stringify(req.body, null, 2));
 
       const recordData = insertHealthRecordSchema.parse({
         ...req.body,
         userId: req.user.id,
-        sharedWith: req.body.sharedWith || [], // Ensure sharedWith is always an array
+        sharedWith: req.body.sharedWith || [],
       });
+
+      console.log('Validated record data:', JSON.stringify(recordData, null, 2));
 
       // Create record first
       const record = await storage.createHealthRecord(recordData);
-      console.log('Health record created:', record);
+      console.log('Health record created:', JSON.stringify(record, null, 2));
 
       // If a signature is provided, verify it
       if (req.body.signature && req.user.publicKey) {
@@ -55,12 +61,12 @@ export function registerRoutes(app: Express): Server {
     } catch (err) {
       console.error('Error creating health record:', err);
       if (err instanceof ZodError) {
-        res.status(400).json({
+        return res.status(400).json({
           message: "Validation error",
           errors: err.errors
         });
       } else {
-        res.status(500).json({ 
+        return res.status(500).json({ 
           message: "Internal server error",
           error: err instanceof Error ? err.message : "Unknown error" 
         });

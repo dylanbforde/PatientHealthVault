@@ -37,6 +37,148 @@ import { format } from "date-fns";
 import { Loader2, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
+function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
+  const form = useForm({
+    resolver: zodResolver(insertHealthRecordSchema),
+    defaultValues: {
+      title: "",
+      date: new Date(),
+      recordType: "",
+      facility: "",
+      content: { notes: "" },
+      isEmergencyAccessible: false,
+      sharedWith: [],
+    },
+  });
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit((data) => {
+        try {
+          const formattedData = {
+            ...data,
+            date: new Date(data.date),
+          };
+          onSubmit(formattedData);
+        } catch (error) {
+          console.error('Form submission error:', error);
+        }
+      })} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="title"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Title</FormLabel>
+              <FormControl>
+                <Input {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="date"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Date</FormLabel>
+              <FormControl>
+                <Input
+                  type="date"
+                  {...field}
+                  value={field.value instanceof Date ? field.value.toISOString().split('T')[0] : ''}
+                  onChange={(e) => field.onChange(new Date(e.target.value))}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="recordType"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Record Type</FormLabel>
+              <FormControl>
+                <Input {...field} placeholder="e.g., Lab Test, Prescription, Visit" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="facility"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Healthcare Facility</FormLabel>
+              <FormControl>
+                <Input {...field} placeholder="Hospital or clinic name" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="content"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Record Details</FormLabel>
+              <FormControl>
+                <Textarea
+                  placeholder="Enter record details"
+                  value={field.value.notes || ""}
+                  onChange={(e) => field.onChange({ notes: e.target.value })}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="isEmergencyAccessible"
+          render={({ field }) => (
+            <FormItem className="flex items-center gap-2">
+              <FormControl>
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              </FormControl>
+              <FormLabel>Allow Emergency Access</FormLabel>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={form.formState.isSubmitting}
+        >
+          {form.formState.isSubmitting ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Creating...
+            </>
+          ) : (
+            'Create Record'
+          )}
+        </Button>
+      </form>
+    </Form>
+  );
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -46,8 +188,18 @@ export default function Dashboard() {
 
   const createRecord = useMutation({
     mutationFn: async (data: any) => {
-      const res = await apiRequest("POST", "/api/health-records", data);
-      return await res.json();
+      try {
+        console.log('Sending record data:', data);
+        const res = await apiRequest("POST", "/api/health-records", data);
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.message || 'Failed to create record');
+        }
+        return await res.json();
+      } catch (error) {
+        console.error('Record creation error:', error);
+        throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/health-records"] });
@@ -196,137 +348,5 @@ export default function Dashboard() {
         </div>
       </main>
     </div>
-  );
-}
-
-function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
-  const form = useForm({
-    resolver: zodResolver(insertHealthRecordSchema),
-    defaultValues: {
-      title: "",
-      date: new Date(),
-      recordType: "",
-      facility: "",
-      content: { notes: "" },
-      isEmergencyAccessible: false,
-      sharedWith: [], // Add default empty array for sharedWith
-    },
-  });
-
-  return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit((data) => {
-        try {
-          // Convert form data date string to Date object
-          const formattedData = {
-            ...data,
-            date: new Date(data.date),
-          };
-          onSubmit(formattedData);
-        } catch (error) {
-          console.error('Form submission error:', error);
-        }
-      })} className="space-y-4">
-        <FormField
-          control={form.control}
-          name="title"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Title</FormLabel>
-              <FormControl>
-                <Input {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="date"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Date</FormLabel>
-              <FormControl>
-                <Input
-                  type="date"
-                  {...field}
-                  value={field.value instanceof Date ? field.value.toISOString().split('T')[0] : ''}
-                  onChange={(e) => field.onChange(new Date(e.target.value))}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="recordType"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Record Type</FormLabel>
-              <FormControl>
-                <Input {...field} placeholder="e.g., Lab Test, Prescription, Visit" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="facility"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Healthcare Facility</FormLabel>
-              <FormControl>
-                <Input {...field} placeholder="Hospital or clinic name" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="content"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Record Details</FormLabel>
-              <FormControl>
-                <Textarea
-                  placeholder="Enter record details"
-                  value={field.value.notes || ""}
-                  onChange={(e) => field.onChange({ notes: e.target.value })}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="isEmergencyAccessible"
-          render={({ field }) => (
-            <FormItem className="flex items-center gap-2">
-              <FormControl>
-                <Switch
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                />
-              </FormControl>
-              <FormLabel>Allow Emergency Access</FormLabel>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <Button type="submit" className="w-full">
-          Create Record
-        </Button>
-      </form>
-    </Form>
   );
 }
