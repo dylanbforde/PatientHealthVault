@@ -39,7 +39,7 @@ import { useToast } from "@/hooks/use-toast";
 
 function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
   const form = useForm({
-    resolver: zodResolver(insertHealthRecordSchema),
+    resolver: zodResolver(insertHealthRecordSchema.omit({ userId: true })),
     defaultValues: {
       title: "",
       date: new Date(),
@@ -55,13 +55,19 @@ function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
     <Form {...form}>
       <form onSubmit={form.handleSubmit((data) => {
         try {
+          console.log('Form data before submission:', data);
           const formattedData = {
             ...data,
             date: new Date(data.date),
           };
+          console.log('Formatted data:', formattedData);
           onSubmit(formattedData);
         } catch (error) {
           console.error('Form submission error:', error);
+          // Show validation errors if any
+          if (form.formState.errors) {
+            console.log('Form validation errors:', form.formState.errors);
+          }
         }
       })} className="space-y-4">
         <FormField
@@ -174,6 +180,13 @@ function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
             'Create Record'
           )}
         </Button>
+
+        {/* Display any form-level errors */}
+        {Object.keys(form.formState.errors).length > 0 && (
+          <div className="text-sm text-red-500 mt-2">
+            Please fix the errors above and try again.
+          </div>
+        )}
       </form>
     </Form>
   );
@@ -189,13 +202,16 @@ export default function Dashboard() {
   const createRecord = useMutation({
     mutationFn: async (data: any) => {
       try {
-        console.log('Sending record data:', data);
+        console.log('Sending record data to server:', data);
         const res = await apiRequest("POST", "/api/health-records", data);
         if (!res.ok) {
           const errorData = await res.json();
+          console.error('Server response error:', errorData);
           throw new Error(errorData.message || 'Failed to create record');
         }
-        return await res.json();
+        const responseData = await res.json();
+        console.log('Server response success:', responseData);
+        return responseData;
       } catch (error) {
         console.error('Record creation error:', error);
         throw error;
@@ -209,10 +225,10 @@ export default function Dashboard() {
       });
     },
     onError: (error: Error) => {
-      console.error('Record creation error:', error);
+      console.error('Mutation error:', error);
       toast({
         title: "Error creating record",
-        description: error.message,
+        description: error.message || "Failed to create health record",
         variant: "destructive",
       });
     },
