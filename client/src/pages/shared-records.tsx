@@ -8,6 +8,8 @@ import { NavBar } from "@/components/nav-bar";
 export default function SharedRecordsPage() {
   const { data: records, isLoading } = useQuery<HealthRecord[]>({
     queryKey: ["/api/shared-records"],
+    staleTime: 0, // Don't cache the data
+    cacheTime: 0, // Remove from cache immediately when component unmounts
   });
 
   if (isLoading) {
@@ -36,7 +38,7 @@ export default function SharedRecordsPage() {
                   </p>
                   <p className="text-sm">{record.facility}</p>
                   <p className="text-sm mt-2">
-                    {typeof record.content === "object" && record.content.notes}
+                    {typeof record.content === 'object' && 'notes' in record.content ? record.content.notes : ''}
                   </p>
                 </div>
               ))}
