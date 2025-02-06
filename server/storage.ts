@@ -40,10 +40,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByPatientCode(patientCode: string): Promise<User | undefined> {
+    console.log('Looking up user by patient code:', patientCode);
     const [user] = await db
       .select()
       .from(users)
       .where(eq(users.patientCode, patientCode));
+
+    console.log('Found user:', user ? JSON.stringify(user, null, 2) : 'No user found');
     return user;
   }
 
@@ -129,6 +132,7 @@ export class DatabaseStorage implements IStorage {
 
   async getHealthRecords(userId: number): Promise<HealthRecord[]> {
     console.log('Fetching health records for user:', userId);
+
     // Strictly only return records owned by this specific user
     const records = await db
       .select()
@@ -136,7 +140,7 @@ export class DatabaseStorage implements IStorage {
       .where(eq(healthRecords.userId, userId))
       .orderBy(sql`${healthRecords.date} DESC`);
 
-    console.log('Found records:', records);
+    console.log('Found records:', JSON.stringify(records, null, 2));
     return records;
   }
 
