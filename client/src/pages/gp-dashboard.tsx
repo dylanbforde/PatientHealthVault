@@ -89,7 +89,7 @@ export default function GPDashboard() {
       if (!selectedPatient) throw new Error("No patient selected");
 
       const record = {
-        userId: selectedPatient.id,
+        userId: selectedPatient.id,  // Ensure we're using the selected patient's ID
         title: `${data.diagnosis} - ${format(new Date(), "PP")}`,
         date: new Date(),
         recordType: "GP Visit",
