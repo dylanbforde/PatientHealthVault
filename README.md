@@ -1,1 +1,10 @@
-Replit is quite cool tbh.
+![Screenshot 2025-02-07 000223](https://github.com/user-attachments/assets/91087f85-c322-4335-b1ba-fa92202bc82b)
+![Screenshot 2025-02-07 000242](https://github.com/user-attachments/assets/72acf8e8-bb78-490c-90eb-a24c362f0a7d)
+![Screenshot 2025-02-07 000257](https://github.com/user-attachments/assets/d57f4c92-0ad3-49d3-ab16-5b11d62ccf83)
+![Screenshot 2025-02-07 000314](https://github.com/user-attachments/assets/9366fbcb-8432-4b52-a334-230787d798ea)
+![Screenshot 2025-02-07 000325](https://github.com/user-attachments/assets/c2633456-be05-4f5a-bc57-d1406256c052)
+![Screenshot 2025-02-07 000337](https://github.com/user-attachments/assets/d5447f2c-31d8-4b7c-a457-a8d4d17563ce)
+![Screenshot 2025-02-07 000349](https://github.com/user-attachments/assets/f14ab9bc-5aa0-4ad6-a97e-7a66486a36fb)
+![Screenshot 2025-02-07 000417](https://github.com/user-attachments/assets/410514e2-645c-4d48-aaf8-8d6e4f32e00d)
+![Screenshot 2025-02-07 000427](https://github.com/user-attachments/assets/bda76710-92e3-4b54-8af3-59d29d9b0fc7)
+![Screenshot 2025-02-07 000453](https://github.com/user-attachments/assets/73b8d963-23f9-4242-96a1-8462f5ef35c4)
