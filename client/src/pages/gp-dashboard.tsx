@@ -45,7 +45,7 @@ export default function GPDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [selectedPatient, setSelectedPatient] = useState<User | null>(null);
-  const [selectedTab, setSelectedTab] = useState("records");
+  const [selectedTab, setSelectedTab] = useState<"records" | "documents" | "calendar" | "form" | "list">("records"); // Added "form" and "list" states
 
   const lookupForm = useForm<z.infer<typeof patientCodeSchema>>({
     resolver: zodResolver(patientCodeSchema),
@@ -164,6 +164,7 @@ export default function GPDashboard() {
         ...data,
         patientUuid: selectedPatient.uuid,
         gpUsername: user?.username,
+        status: "scheduled" //Added status field
       };
 
       const res = await apiRequest("POST", "/api/appointments", appointment);
@@ -176,6 +177,7 @@ export default function GPDashboard() {
         description: "The appointment has been scheduled successfully.",
       });
       appointmentForm.reset();
+      setSelectedTab("calendar"); //Added to switch back to calendar after successful appointment scheduling.
     },
   });
 
@@ -196,146 +198,206 @@ export default function GPDashboard() {
     );
   }
 
-  const handleDateSelect = (selectInfo: any) => {
-    const calendarApi = selectInfo.view.calendar;
-    calendarApi.unselect();
+  const AppointmentsTab = () => {
+    const handleDateSelect = (selectInfo: any) => {
+      const calendarApi = selectInfo.view.calendar;
+      calendarApi.unselect();
 
-    appointmentForm.setValue("datetime", selectInfo.start);
+      const start = new Date(selectInfo.start);
+      appointmentForm.setValue("datetime", start);
+
+      // Open the form dialog
+      if (start > new Date()) {
+        setSelectedTab("form");
+      }
+    };
+
+    const [currentTab, setCurrentTab] = useState<"calendar" | "form" | "list">("calendar");
+
+    return (
+      <div className="space-y-4">
+        <Tabs value={currentTab} onValueChange={setCurrentTab} className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="calendar">Calendar</TabsTrigger>
+            <TabsTrigger value="form">Schedule</TabsTrigger>
+            <TabsTrigger value="list">List</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="calendar">
+            <div className="rounded-lg border p-4">
+              <FullCalendar
+                plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+                initialView="timeGridWeek"
+                selectable={true}
+                select={handleDateSelect}
+                headerToolbar={{
+                  left: 'prev,next today',
+                  center: 'title',
+                  right: 'timeGridWeek,timeGridDay'
+                }}
+                events={patientAppointments?.map(apt => ({
+                  id: apt.id.toString(),
+                  title: `${apt.type} - ${selectedPatient?.fullName}`,
+                  start: new Date(apt.datetime),
+                  end: new Date(new Date(apt.datetime).getTime() + apt.duration * 60000),
+                  backgroundColor: apt.status === 'scheduled' ? '#3b82f6' :
+                    apt.status === 'completed' ? '#10b981' : '#ef4444'
+                }))}
+                slotMinTime="08:00:00"
+                slotMaxTime="18:00:00"
+                allDaySlot={false}
+                slotDuration="00:15:00"
+                businessHours={{
+                  daysOfWeek: [1, 2, 3, 4, 5],
+                  startTime: '08:00',
+                  endTime: '18:00',
+                }}
+              />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="form">
+            <div className="rounded-lg border p-4">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Schedule Appointment</h3>
+                <Button
+                  variant="outline"
+                  onClick={() => setCurrentTab("calendar")}
+                  size="sm"
+                >
+                  Back to Calendar
+                </Button>
+              </div>
+              <Form {...appointmentForm}>
+                <form onSubmit={appointmentForm.handleSubmit((data) => {
+                  const appointment = {
+                    ...data,
+                    gpUsername: user?.username,
+                    patientUuid: selectedPatient?.uuid,
+                    status: "scheduled"
+                  };
+                  createAppointmentMutation.mutate(appointment, {
+                    onSuccess: () => setCurrentTab("calendar")
+                  });
+                })} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={appointmentForm.control}
+                      name="type"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Type</FormLabel>
+                          <FormControl>
+                            <select
+                              {...field}
+                              className="w-full p-2 border rounded"
+                            >
+                              <option value="checkup">Check-up</option>
+                              <option value="follow_up">Follow-up</option>
+                              <option value="consultation">Consultation</option>
+                              <option value="other">Other</option>
+                            </select>
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={appointmentForm.control}
+                      name="duration"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Duration</FormLabel>
+                          <FormControl>
+                            <select
+                              {...field}
+                              className="w-full p-2 border rounded"
+                              onChange={(e) => field.onChange(parseInt(e.target.value))}
+                            >
+                              <option value="15">15 minutes</option>
+                              <option value="30">30 minutes</option>
+                              <option value="45">45 minutes</option>
+                              <option value="60">1 hour</option>
+                            </select>
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <FormField
+                    control={appointmentForm.control}
+                    name="notes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Notes</FormLabel>
+                        <FormControl>
+                          <Textarea {...field} placeholder="Enter appointment notes" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <Button
+                    type="submit"
+                    disabled={createAppointmentMutation.isPending}
+                    className="w-full"
+                  >
+                    {createAppointmentMutation.isPending && (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    )}
+                    Schedule Appointment
+                  </Button>
+                </form>
+              </Form>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="list">
+            <div className="rounded-lg border p-4">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">All Appointments</h3>
+                <Button
+                  variant="outline"
+                  onClick={() => setCurrentTab("calendar")}
+                  size="sm"
+                >
+                  Back to Calendar
+                </Button>
+              </div>
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date & Time</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Duration</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {patientAppointments?.map((appointment) => (
+                      <TableRow key={appointment.id}>
+                        <TableCell>{format(new Date(appointment.datetime), "PPp")}</TableCell>
+                        <TableCell>{appointment.type}</TableCell>
+                        <TableCell>{appointment.duration} mins</TableCell>
+                        <TableCell>
+                          <span className={`px-2 py-1 rounded-full text-xs ${
+                            appointment.status === "scheduled" ? "bg-blue-100 text-blue-800" :
+                              appointment.status === "completed" ? "bg-green-100 text-green-800" :
+                                "bg-red-100 text-red-800"
+                          }`}>
+                            {appointment.status}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          </TabsContent>
+        </Tabs>
+      </div>
+    );
   };
-
-  const AppointmentsTab = () => (
-    <div className="space-y-4">
-      <div className="rounded-lg border p-4">
-        <FullCalendar
-          plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-          initialView="timeGridWeek"
-          selectable={true}
-          select={handleDateSelect}
-          headerToolbar={{
-            left: 'prev,next today',
-            center: 'title',
-            right: 'dayGridMonth,timeGridWeek,timeGridDay'
-          }}
-          events={patientAppointments?.map(apt => ({
-            id: apt.id.toString(),
-            title: `${apt.type} - ${selectedPatient?.fullName}`,
-            start: new Date(apt.datetime),
-            end: new Date(new Date(apt.datetime).getTime() + apt.duration * 60000),
-            backgroundColor: apt.status === 'scheduled' ? '#3b82f6' :
-              apt.status === 'completed' ? '#10b981' : '#ef4444'
-          }))}
-          slotMinTime="08:00:00"
-          slotMaxTime="18:00:00"
-          allDaySlot={false}
-          slotDuration="00:15:00"
-          businessHours={{
-            daysOfWeek: [1, 2, 3, 4, 5],
-            startTime: '08:00',
-            endTime: '18:00',
-          }}
-        />
-      </div>
-      <Form {...appointmentForm}>
-        <form onSubmit={appointmentForm.handleSubmit((data) => createAppointmentMutation.mutate(data))} className="space-y-4">
-          <FormField
-            control={appointmentForm.control}
-            name="type"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Appointment Type</FormLabel>
-                <FormControl>
-                  <select
-                    {...field}
-                    className="w-full p-2 border rounded"
-                  >
-                    <option value="checkup">Check-up</option>
-                    <option value="follow_up">Follow-up</option>
-                    <option value="consultation">Consultation</option>
-                    <option value="other">Other</option>
-                  </select>
-                </FormControl>
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={appointmentForm.control}
-            name="duration"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Duration (minutes)</FormLabel>
-                <FormControl>
-                  <select
-                    {...field}
-                    className="w-full p-2 border rounded"
-                    onChange={(e) => field.onChange(parseInt(e.target.value))}
-                  >
-                    <option value="15">15 minutes</option>
-                    <option value="30">30 minutes</option>
-                    <option value="45">45 minutes</option>
-                    <option value="60">1 hour</option>
-                  </select>
-                </FormControl>
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={appointmentForm.control}
-            name="notes"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Notes</FormLabel>
-                <FormControl>
-                  <Textarea {...field} placeholder="Enter appointment notes" />
-                </FormControl>
-              </FormItem>
-            )}
-          />
-          <Button
-            type="submit"
-            disabled={createAppointmentMutation.isPending}
-            className="w-full"
-          >
-            {createAppointmentMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Schedule Appointment
-          </Button>
-        </form>
-      </Form>
-
-      <div className="mt-8">
-        <h3 className="text-lg font-semibold mb-4">Upcoming Appointments</h3>
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date & Time</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Duration</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {patientAppointments?.map((appointment) => (
-                <TableRow key={appointment.id}>
-                  <TableCell>{format(new Date(appointment.datetime), "PPp")}</TableCell>
-                  <TableCell>{appointment.type}</TableCell>
-                  <TableCell>{appointment.duration} mins</TableCell>
-                  <TableCell>
-                    <span className={`px-2 py-1 rounded-full text-xs ${
-                      appointment.status === "scheduled" ? "bg-blue-100 text-blue-800" :
-                        appointment.status === "completed" ? "bg-green-100 text-green-800" :
-                          "bg-red-100 text-red-800"
-                    }`}>
-                      {appointment.status}
-                    </span>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
-    </div>
-  );
 
   return (
     <AnimatedLayout>
@@ -491,7 +553,7 @@ export default function GPDashboard() {
                           <FormField
                             control={documentForm.control}
                             name="content"
-                            render={({ field: { onChange, ...field } }) => (
+                            render={({ field: { value, onChange, ...field } }) => (
                               <FormItem>
                                 <FormLabel>Upload Document</FormLabel>
                                 <FormControl>
@@ -505,6 +567,7 @@ export default function GPDashboard() {
                                       }
                                     }}
                                     {...field}
+                                    value={undefined}
                                   />
                                 </FormControl>
                               </FormItem>
