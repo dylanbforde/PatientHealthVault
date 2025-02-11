@@ -6,14 +6,14 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { User, insertHealthRecordSchema } from "@shared/schema";
+import { User, insertHealthRecordSchema, insertDocumentSchema, insertAppointmentSchema } from "@shared/schema";
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { NavBar } from "@/components/nav-bar";
 import { AnimatedLayout } from "@/components/animated-layout";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Loader2, FileUp, Stethoscope } from "lucide-react";
+import { Loader2, FileUp, Stethoscope, Calendar } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -42,11 +42,12 @@ export default function GPDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [selectedPatient, setSelectedPatient] = useState<User | null>(null);
+  const [selectedTab, setSelectedTab] = useState("records");
 
   const lookupForm = useForm<z.infer<typeof patientCodeSchema>>({
     resolver: zodResolver(patientCodeSchema),
     defaultValues: {
-      patientCode: "",  // Initialize with empty string
+      patientCode: "",
     },
   });
 
@@ -60,17 +61,44 @@ export default function GPDashboard() {
     },
   });
 
+  const documentForm = useForm({
+    resolver: zodResolver(insertDocumentSchema),
+    defaultValues: {
+      title: "",
+      type: "lab_result",
+      description: "",
+      content: "",
+      contentType: "",
+      isPrivate: false,
+    },
+  });
+
+  const appointmentForm = useForm({
+    resolver: zodResolver(insertAppointmentSchema),
+    defaultValues: {
+      type: "checkup",
+      datetime: new Date(),
+      duration: 30,
+      notes: "",
+    },
+  });
+
   // Query to fetch patient records when a patient is selected
   const { data: patientRecords, isLoading: isLoadingRecords } = useQuery({
     queryKey: ["/api/health-records", selectedPatient?.id],
     enabled: !!selectedPatient,
-    queryFn: async () => {
-      const res = await apiRequest("GET", `/api/health-records?userId=${selectedPatient!.id}`);
-      if (!res.ok) {
-        throw new Error("Failed to fetch patient records");
-      }
-      return res.json();
-    },
+  });
+
+  // Query to fetch patient documents
+  const { data: patientDocuments, isLoading: isLoadingDocuments } = useQuery({
+    queryKey: ["/api/documents", selectedPatient?.id],
+    enabled: !!selectedPatient,
+  });
+
+  // Query to fetch patient appointments
+  const { data: patientAppointments, isLoading: isLoadingAppointments } = useQuery({
+    queryKey: ["/api/appointments", selectedPatient?.id],
+    enabled: !!selectedPatient,
   });
 
   const lookupMutation = useMutation({
@@ -85,62 +113,51 @@ export default function GPDashboard() {
         description: `Found patient: ${patient.fullName}`,
       });
     },
-    onError: (error: Error) => {
+  });
+
+  const createDocumentMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof insertDocumentSchema>) => {
+      if (!selectedPatient) throw new Error("No patient selected");
+      const formData = new FormData();
+      formData.append("file", data.content);
+      formData.append("data", JSON.stringify({
+        ...data,
+        patientUuid: selectedPatient.uuid,
+        uploadedBy: user?.username,
+      }));
+
+      const res = await apiRequest("POST", "/api/documents", formData);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents", selectedPatient?.id] });
       toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
+        title: "Document Uploaded",
+        description: "The document has been uploaded successfully.",
       });
+      documentForm.reset();
     },
   });
 
-  const createRecordMutation = useMutation({
-    mutationFn: async (data: z.infer<typeof gpHealthRecordSchema>) => {
+  const createAppointmentMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof insertAppointmentSchema>) => {
       if (!selectedPatient) throw new Error("No patient selected");
-
-      const record = {
-        patientUuid: selectedPatient.uuid, // Use the UUID instead of userId
-        title: `${data.diagnosis} - ${format(new Date(), "PP")}`,
-        date: new Date(),
-        recordType: "GP Visit",
-        facility: user?.fullName || "Unknown GP",
-        content: {
-          notes: data.notes,
-          diagnosis: data.diagnosis,
-          treatment: data.treatment,
-          privateNotes: data.privateNotes || ""
-        },
-        isEmergencyAccessible: false,
-        sharedWith: [],
-        status: "pending"
+      const appointment = {
+        ...data,
+        patientUuid: selectedPatient.uuid,
+        gpUsername: user?.username,
       };
 
-      const res = await apiRequest("POST", "/api/health-records", record);
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        console.error("Server response error:", errorData);
-        throw new Error(errorData.message || "Failed to create record");
-      }
-
-      const createdRecord = await res.json();
-      return createdRecord;
+      const res = await apiRequest("POST", "/api/appointments", appointment);
+      return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/health-records", selectedPatient?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/appointments", selectedPatient?.id] });
       toast({
-        title: "Success",
-        description: "Record created and shared with patient for review.",
+        title: "Appointment Scheduled",
+        description: "The appointment has been scheduled successfully.",
       });
-      recordForm.reset();
-    },
-    onError: (error: Error) => {
-      console.error("Record creation error:", error);
-      toast({
-        title: "Error creating record",
-        description: error.message || "Failed to create health record",
-        variant: "destructive",
-      });
+      appointmentForm.reset();
     },
   });
 
@@ -212,143 +229,293 @@ export default function GPDashboard() {
             </CardContent>
           </Card>
 
-          {/* Patient Records and Creation Tabs */}
+          {/* Patient Management Tabs */}
           {selectedPatient && (
             <Card>
               <CardHeader>
                 <CardTitle className="font-mono tracking-wider uppercase flex items-center gap-2">
                   <FileUp className="h-4 w-4 text-primary" />
-                  Patient Records - {selectedPatient.fullName}
+                  Patient Management - {selectedPatient.fullName}
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Tabs defaultValue="records" className="space-y-4">
+                <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-4">
                   <TabsList>
-                    <TabsTrigger value="records">View Records</TabsTrigger>
-                    <TabsTrigger value="create">Create New Record</TabsTrigger>
+                    <TabsTrigger value="records">Records</TabsTrigger>
+                    <TabsTrigger value="documents">Documents</TabsTrigger>
+                    <TabsTrigger value="appointments">Appointments</TabsTrigger>
                   </TabsList>
 
+                  {/* Records Tab */}
                   <TabsContent value="records">
-                    <div className="rounded-md border">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Date</TableHead>
-                            <TableHead>Type</TableHead>
-                            <TableHead>Title</TableHead>
-                            <TableHead>Status</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {patientRecords?.map((record) => (
-                            <TableRow key={record.id}>
-                              <TableCell>{format(new Date(record.date), "PP")}</TableCell>
-                              <TableCell>{record.recordType}</TableCell>
-                              <TableCell>{record.title}</TableCell>
-                              <TableCell>
-                                <span className={`px-2 py-1 rounded-full text-xs ${
-                                  record.status === "pending" ? "bg-yellow-100 text-yellow-800" :
-                                    record.status === "accepted" ? "bg-green-100 text-green-800" :
-                                      "bg-red-100 text-red-800"
-                                }`}>
-                                  {record.status}
-                                </span>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                          {(!patientRecords || patientRecords.length === 0) && (
+                    <div className="space-y-4">
+                      <div className="rounded-md border">
+                        <Table>
+                          <TableHeader>
                             <TableRow>
-                              <TableCell colSpan={4} className="text-center text-muted-foreground">
-                                No records found
-                              </TableCell>
+                              <TableHead>Date</TableHead>
+                              <TableHead>Type</TableHead>
+                              <TableHead>Title</TableHead>
+                              <TableHead>Status</TableHead>
                             </TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
+                          </TableHeader>
+                          <TableBody>
+                            {patientRecords?.map((record) => (
+                              <TableRow key={record.id}>
+                                <TableCell>{format(new Date(record.date), "PP")}</TableCell>
+                                <TableCell>{record.recordType}</TableCell>
+                                <TableCell>{record.title}</TableCell>
+                                <TableCell>
+                                  <span className={`px-2 py-1 rounded-full text-xs ${
+                                    record.status === "pending" ? "bg-yellow-100 text-yellow-800" :
+                                      record.status === "accepted" ? "bg-green-100 text-green-800" :
+                                        "bg-red-100 text-red-800"
+                                  }`}>
+                                    {record.status}
+                                  </span>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
                     </div>
                   </TabsContent>
 
-                  <TabsContent value="create">
-                    <Form {...recordForm}>
-                      <form onSubmit={recordForm.handleSubmit((data) => createRecordMutation.mutate(data))} className="space-y-4">
-                        <FormField
-                          control={recordForm.control}
-                          name="notes"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Medical Notes (Visible to Patient)</FormLabel>
-                              <FormControl>
-                                <Textarea {...field} placeholder="Enter medical notes that will be visible to the patient" />
-                              </FormControl>
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={recordForm.control}
-                          name="privateNotes"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Private Notes (GP Only)</FormLabel>
-                              <FormDescription>These notes will only be visible to GPs</FormDescription>
-                              <FormControl>
-                                <Textarea {...field} placeholder="Enter private notes (optional)" />
-                              </FormControl>
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={recordForm.control}
-                          name="diagnosis"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Diagnosis</FormLabel>
-                              <FormControl>
-                                <Input {...field} placeholder="Enter diagnosis" />
-                              </FormControl>
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={recordForm.control}
-                          name="treatment"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Treatment Plan</FormLabel>
-                              <FormControl>
-                                <Textarea {...field} placeholder="Enter treatment plan" />
-                              </FormControl>
-                            </FormItem>
-                          )}
-                        />
-
-                        <div className="flex gap-4">
+                  {/* Documents Tab */}
+                  <TabsContent value="documents">
+                    <div className="space-y-4">
+                      <Form {...documentForm}>
+                        <form onSubmit={documentForm.handleSubmit((data) => createDocumentMutation.mutate(data))} className="space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <FormField
+                              control={documentForm.control}
+                              name="title"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Document Title</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} placeholder="Enter document title" />
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={documentForm.control}
+                              name="type"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Document Type</FormLabel>
+                                  <FormControl>
+                                    <select
+                                      {...field}
+                                      className="w-full p-2 border rounded"
+                                    >
+                                      <option value="lab_result">Lab Result</option>
+                                      <option value="prescription">Prescription</option>
+                                      <option value="imaging">Imaging</option>
+                                      <option value="other">Other</option>
+                                    </select>
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                          <FormField
+                            control={documentForm.control}
+                            name="description"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Description</FormLabel>
+                                <FormControl>
+                                  <Textarea {...field} placeholder="Enter document description" />
+                                </FormControl>
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={documentForm.control}
+                            name="content"
+                            render={({ field: { onChange, ...field } }) => (
+                              <FormItem>
+                                <FormLabel>Upload Document</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    type="file"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        onChange(file);
+                                        documentForm.setValue("contentType", file.type);
+                                      }
+                                    }}
+                                    {...field}
+                                  />
+                                </FormControl>
+                              </FormItem>
+                            )}
+                          />
                           <Button
                             type="submit"
-                            className="flex-1"
-                            disabled={createRecordMutation.isPending}
+                            disabled={createDocumentMutation.isPending}
+                            className="w-full"
                           >
-                            {createRecordMutation.isPending && (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            )}
-                            Create Record
+                            {createDocumentMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Upload Document
                           </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => {
-                              setSelectedPatient(null);
-                              lookupForm.reset();
-                              recordForm.reset();
-                            }}
-                          >
-                            Clear Form
-                          </Button>
+                        </form>
+                      </Form>
+
+                      {/* List of uploaded documents */}
+                      <div className="mt-8">
+                        <h3 className="text-lg font-semibold mb-4">Uploaded Documents</h3>
+                        <div className="rounded-md border">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Date</TableHead>
+                                <TableHead>Title</TableHead>
+                                <TableHead>Type</TableHead>
+                                <TableHead>Description</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {patientDocuments?.map((doc) => (
+                                <TableRow key={doc.id}>
+                                  <TableCell>{format(new Date(doc.uploadedAt), "PP")}</TableCell>
+                                  <TableCell>{doc.title}</TableCell>
+                                  <TableCell>{doc.type}</TableCell>
+                                  <TableCell>{doc.description}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
                         </div>
-                      </form>
-                    </Form>
+                      </div>
+                    </div>
+                  </TabsContent>
+
+                  {/* Appointments Tab */}
+                  <TabsContent value="appointments">
+                    <div className="space-y-4">
+                      <Form {...appointmentForm}>
+                        <form onSubmit={appointmentForm.handleSubmit((data) => createAppointmentMutation.mutate(data))} className="space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <FormField
+                              control={appointmentForm.control}
+                              name="datetime"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Date & Time</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      type="datetime-local"
+                                      {...field}
+                                      value={field.value instanceof Date ? field.value.toISOString().slice(0, 16) : ""}
+                                      onChange={(e) => field.onChange(new Date(e.target.value))}
+                                    />
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={appointmentForm.control}
+                              name="type"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Appointment Type</FormLabel>
+                                  <FormControl>
+                                    <select
+                                      {...field}
+                                      className="w-full p-2 border rounded"
+                                    >
+                                      <option value="checkup">Check-up</option>
+                                      <option value="follow_up">Follow-up</option>
+                                      <option value="consultation">Consultation</option>
+                                      <option value="other">Other</option>
+                                    </select>
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                          <FormField
+                            control={appointmentForm.control}
+                            name="duration"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Duration (minutes)</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    type="number"
+                                    {...field}
+                                    onChange={(e) => field.onChange(parseInt(e.target.value))}
+                                    min="15"
+                                    max="120"
+                                    step="15"
+                                  />
+                                </FormControl>
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={appointmentForm.control}
+                            name="notes"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Notes</FormLabel>
+                                <FormControl>
+                                  <Textarea {...field} placeholder="Enter appointment notes" />
+                                </FormControl>
+                              </FormItem>
+                            )}
+                          />
+                          <Button
+                            type="submit"
+                            disabled={createAppointmentMutation.isPending}
+                            className="w-full"
+                          >
+                            {createAppointmentMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Schedule Appointment
+                          </Button>
+                        </form>
+                      </Form>
+
+                      {/* List of appointments */}
+                      <div className="mt-8">
+                        <h3 className="text-lg font-semibold mb-4">Scheduled Appointments</h3>
+                        <div className="rounded-md border">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Date & Time</TableHead>
+                                <TableHead>Type</TableHead>
+                                <TableHead>Duration</TableHead>
+                                <TableHead>Status</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {patientAppointments?.map((appointment) => (
+                                <TableRow key={appointment.id}>
+                                  <TableCell>{format(new Date(appointment.datetime), "PPp")}</TableCell>
+                                  <TableCell>{appointment.type}</TableCell>
+                                  <TableCell>{appointment.duration} mins</TableCell>
+                                  <TableCell>
+                                    <span className={`px-2 py-1 rounded-full text-xs ${
+                                      appointment.status === "scheduled" ? "bg-blue-100 text-blue-800" :
+                                        appointment.status === "completed" ? "bg-green-100 text-green-800" :
+                                          "bg-red-100 text-red-800"
+                                    }`}>
+                                      {appointment.status}
+                                    </span>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </div>
+                    </div>
                   </TabsContent>
                 </Tabs>
               </CardContent>

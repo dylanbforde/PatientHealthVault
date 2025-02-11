@@ -93,9 +93,58 @@ export const insertUserSchema = createInsertSchema(users).extend({
 
 export const insertHealthRecordSchema = healthRecordSchema;
 
+// New schema for medical documents
+export const documents = pgTable("documents", {
+  id: serial("id").primaryKey(),
+  uuid: uuid("uuid").notNull().unique().defaultRandom(),
+  patientUuid: uuid("patient_uuid").notNull(),
+  uploadedBy: text("uploaded_by").notNull(), // GP's username
+  title: text("title").notNull(),
+  type: text("type").notNull(), // e.g., "lab_result", "prescription", "imaging"
+  contentType: text("content_type").notNull(), // MIME type
+  content: text("content").notNull(), // Base64 encoded content
+  uploadedAt: timestamp("uploaded_at").notNull().defaultNow(),
+  description: text("description"),
+  tags: text("tags").array(),
+  isPrivate: boolean("is_private").default(false),
+});
+
+// New schema for appointments
+export const appointments = pgTable("appointments", {
+  id: serial("id").primaryKey(),
+  uuid: uuid("uuid").notNull().unique().defaultRandom(),
+  patientUuid: uuid("patient_uuid").notNull(),
+  gpUsername: text("gp_username").notNull(),
+  datetime: timestamp("datetime").notNull(),
+  duration: integer("duration").notNull(), // in minutes
+  status: text("status").default("scheduled"), // scheduled, completed, cancelled
+  type: text("type").notNull(), // e.g., "checkup", "follow_up", "consultation"
+  notes: text("notes"),
+  reminderSent: boolean("reminder_sent").default(false),
+});
+
+// Document insert schema
+export const insertDocumentSchema = createInsertSchema(documents).extend({
+  content: z.string().min(1, "Document content is required"),
+  type: z.enum(["lab_result", "prescription", "imaging", "other"]),
+  contentType: z.string().min(1, "Content type is required"),
+});
+
+// Appointment insert schema
+export const insertAppointmentSchema = createInsertSchema(appointments).extend({
+  type: z.enum(["checkup", "follow_up", "consultation", "other"]),
+  duration: z.number().min(15).max(120),
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type HealthRecord = typeof healthRecords.$inferSelect;
 export type InsertHealthRecord = z.infer<typeof insertHealthRecordSchema>;
 export type EmergencyContact = z.infer<typeof emergencyContactSchema>;
 export type SharedAccess = z.infer<typeof sharedAccessSchema>;
+
+// Add new types for Documents and Appointments
+export type InsertDocument = z.infer<typeof insertDocumentSchema>;
+export type Document = typeof documents.$inferSelect;
+export type InsertAppointment = z.infer<typeof insertAppointmentSchema>;
+export type Appointment = typeof appointments.$inferSelect;
