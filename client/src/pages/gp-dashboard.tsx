@@ -45,7 +45,9 @@ export default function GPDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [selectedPatient, setSelectedPatient] = useState<User | null>(null);
-  const [selectedTab, setSelectedTab] = useState<"records" | "documents" | "calendar" | "form" | "list">("records"); // Added "form" and "list" states
+  const [selectedDateTime, setSelectedDateTime] = useState<Date | null>(null);
+  const [showAppointmentForm, setShowAppointmentForm] = useState(false);
+  const [selectedTab, setSelectedTab] = useState("records");
 
   const lookupForm = useForm<z.infer<typeof patientCodeSchema>>({
     resolver: zodResolver(patientCodeSchema),
@@ -119,8 +121,10 @@ export default function GPDashboard() {
     mutationFn: async (data: z.infer<typeof insertDocumentSchema>) => {
       if (!selectedPatient) throw new Error("No patient selected");
 
-      const formData = new FormData();
       const file = data.content as File;
+      if (!file) throw new Error("No file selected");
+
+      const formData = new FormData();
       formData.append("file", file);
       formData.append("title", data.title);
       formData.append("type", data.type);
@@ -129,13 +133,24 @@ export default function GPDashboard() {
       formData.append("uploadedBy", user?.username || "");
       formData.append("contentType", file.type);
 
+      console.log('Uploading document:', {
+        title: data.title,
+        type: data.type,
+        description: data.description,
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size
+      });
+
       const res = await fetch('/api/documents', {
         method: 'POST',
         body: formData,
       });
 
       if (!res.ok) {
-        throw new Error('Failed to upload document');
+        const error = await res.text();
+        console.error('Upload failed:', error);
+        throw new Error(error || 'Failed to upload document');
       }
 
       return res.json();
@@ -143,15 +158,16 @@ export default function GPDashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/documents", selectedPatient?.id] });
       toast({
-        title: "Document Uploaded",
-        description: "The document has been uploaded successfully.",
+        title: "Success",
+        description: "Document uploaded successfully",
       });
       documentForm.reset();
     },
     onError: (error: Error) => {
+      console.error('Document upload error:', error);
       toast({
         title: "Upload Failed",
-        description: error.message,
+        description: error.message || "Failed to upload document",
         variant: "destructive",
       });
     },
@@ -160,24 +176,36 @@ export default function GPDashboard() {
   const createAppointmentMutation = useMutation({
     mutationFn: async (data: z.infer<typeof insertAppointmentSchema>) => {
       if (!selectedPatient) throw new Error("No patient selected");
+
       const appointment = {
         ...data,
         patientUuid: selectedPatient.uuid,
         gpUsername: user?.username,
-        status: "scheduled" //Added status field
+        status: "scheduled"
       };
 
+      console.log('Creating appointment:', appointment);
       const res = await apiRequest("POST", "/api/appointments", appointment);
+      if (!res.ok) {
+        throw new Error('Failed to create appointment');
+      }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/appointments", selectedPatient?.id] });
       toast({
-        title: "Appointment Scheduled",
-        description: "The appointment has been scheduled successfully.",
+        title: "Success",
+        description: "Appointment scheduled successfully",
       });
       appointmentForm.reset();
-      setSelectedTab("calendar"); //Added to switch back to calendar after successful appointment scheduling.
+      setShowAppointmentForm(false);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -200,86 +228,67 @@ export default function GPDashboard() {
 
   const AppointmentsTab = () => {
     const handleDateSelect = (selectInfo: any) => {
-      const calendarApi = selectInfo.view.calendar;
-      calendarApi.unselect();
-
       const start = new Date(selectInfo.start);
-      appointmentForm.setValue("datetime", start);
-
-      // Open the form dialog
+      // Only allow future appointments
       if (start > new Date()) {
-        setSelectedTab("form");
+        setSelectedDateTime(start);
+        appointmentForm.setValue("datetime", start);
+        setShowAppointmentForm(true);
+      } else {
+        toast({
+          title: "Invalid Time",
+          description: "Please select a future date and time",
+          variant: "destructive",
+        });
       }
+      selectInfo.view.calendar.unselect();
     };
-
-    const [currentTab, setCurrentTab] = useState<"calendar" | "form" | "list">("calendar");
 
     return (
       <div className="space-y-4">
-        <Tabs value={currentTab} onValueChange={setCurrentTab} className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="calendar">Calendar</TabsTrigger>
-            <TabsTrigger value="form">Schedule</TabsTrigger>
-            <TabsTrigger value="list">List</TabsTrigger>
-          </TabsList>
+        <div className="rounded-lg border p-4">
+          <FullCalendar
+            plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+            initialView="timeGridWeek"
+            selectable={true}
+            select={handleDateSelect}
+            headerToolbar={{
+              left: 'prev,next today',
+              center: 'title',
+              right: 'timeGridWeek,timeGridDay'
+            }}
+            events={patientAppointments?.map(apt => ({
+              id: apt.id.toString(),
+              title: `${apt.type} - ${selectedPatient?.fullName}`,
+              start: new Date(apt.datetime),
+              end: new Date(new Date(apt.datetime).getTime() + apt.duration * 60000),
+              backgroundColor: apt.status === 'scheduled' ? '#3b82f6' :
+                apt.status === 'completed' ? '#10b981' : '#ef4444'
+            }))}
+            slotMinTime="08:00:00"
+            slotMaxTime="18:00:00"
+            allDaySlot={false}
+            slotDuration="00:15:00"
+            businessHours={{
+              daysOfWeek: [1, 2, 3, 4, 5],
+              startTime: '08:00',
+              endTime: '18:00',
+            }}
+          />
+        </div>
 
-          <TabsContent value="calendar">
-            <div className="rounded-lg border p-4">
-              <FullCalendar
-                plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-                initialView="timeGridWeek"
-                selectable={true}
-                select={handleDateSelect}
-                headerToolbar={{
-                  left: 'prev,next today',
-                  center: 'title',
-                  right: 'timeGridWeek,timeGridDay'
-                }}
-                events={patientAppointments?.map(apt => ({
-                  id: apt.id.toString(),
-                  title: `${apt.type} - ${selectedPatient?.fullName}`,
-                  start: new Date(apt.datetime),
-                  end: new Date(new Date(apt.datetime).getTime() + apt.duration * 60000),
-                  backgroundColor: apt.status === 'scheduled' ? '#3b82f6' :
-                    apt.status === 'completed' ? '#10b981' : '#ef4444'
-                }))}
-                slotMinTime="08:00:00"
-                slotMaxTime="18:00:00"
-                allDaySlot={false}
-                slotDuration="00:15:00"
-                businessHours={{
-                  daysOfWeek: [1, 2, 3, 4, 5],
-                  startTime: '08:00',
-                  endTime: '18:00',
-                }}
-              />
-            </div>
-          </TabsContent>
-
-          <TabsContent value="form">
-            <div className="rounded-lg border p-4">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">Schedule Appointment</h3>
-                <Button
-                  variant="outline"
-                  onClick={() => setCurrentTab("calendar")}
-                  size="sm"
-                >
-                  Back to Calendar
-                </Button>
-              </div>
+        {showAppointmentForm && selectedDateTime && (
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                Schedule Appointment for {format(selectedDateTime, "PPp")}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
               <Form {...appointmentForm}>
-                <form onSubmit={appointmentForm.handleSubmit((data) => {
-                  const appointment = {
-                    ...data,
-                    gpUsername: user?.username,
-                    patientUuid: selectedPatient?.uuid,
-                    status: "scheduled"
-                  };
-                  createAppointmentMutation.mutate(appointment, {
-                    onSuccess: () => setCurrentTab("calendar")
-                  });
-                })} className="space-y-4">
+                <form onSubmit={appointmentForm.handleSubmit((data) => createAppointmentMutation.mutate(data))}
+                      className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <FormField
                       control={appointmentForm.control}
@@ -335,66 +344,68 @@ export default function GPDashboard() {
                       </FormItem>
                     )}
                   />
-                  <Button
-                    type="submit"
-                    disabled={createAppointmentMutation.isPending}
-                    className="w-full"
-                  >
-                    {createAppointmentMutation.isPending && (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    )}
-                    Schedule Appointment
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      type="submit"
+                      disabled={createAppointmentMutation.isPending}
+                      className="flex-1"
+                    >
+                      {createAppointmentMutation.isPending && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      )}
+                      Schedule Appointment
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setShowAppointmentForm(false);
+                        setSelectedDateTime(null);
+                        appointmentForm.reset();
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
                 </form>
               </Form>
-            </div>
-          </TabsContent>
+            </CardContent>
+          </Card>
+        )}
 
-          <TabsContent value="list">
-            <div className="rounded-lg border p-4">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">All Appointments</h3>
-                <Button
-                  variant="outline"
-                  onClick={() => setCurrentTab("calendar")}
-                  size="sm"
-                >
-                  Back to Calendar
-                </Button>
-              </div>
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date & Time</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Duration</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {patientAppointments?.map((appointment) => (
-                      <TableRow key={appointment.id}>
-                        <TableCell>{format(new Date(appointment.datetime), "PPp")}</TableCell>
-                        <TableCell>{appointment.type}</TableCell>
-                        <TableCell>{appointment.duration} mins</TableCell>
-                        <TableCell>
-                          <span className={`px-2 py-1 rounded-full text-xs ${
-                            appointment.status === "scheduled" ? "bg-blue-100 text-blue-800" :
-                              appointment.status === "completed" ? "bg-green-100 text-green-800" :
-                                "bg-red-100 text-red-800"
-                          }`}>
-                            {appointment.status}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
-          </TabsContent>
-        </Tabs>
+        <div className="mt-8">
+          <h3 className="text-lg font-semibold mb-4">Upcoming Appointments</h3>
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date & Time</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Duration</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {patientAppointments?.map((appointment) => (
+                  <TableRow key={appointment.id}>
+                    <TableCell>{format(new Date(appointment.datetime), "PPp")}</TableCell>
+                    <TableCell>{appointment.type}</TableCell>
+                    <TableCell>{appointment.duration} mins</TableCell>
+                    <TableCell>
+                      <span className={`px-2 py-1 rounded-full text-xs ${
+                        appointment.status === "scheduled" ? "bg-blue-100 text-blue-800" :
+                          appointment.status === "completed" ? "bg-green-100 text-green-800" :
+                            "bg-red-100 text-red-800"
+                      }`}>
+                        {appointment.status}
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
       </div>
     );
   };
