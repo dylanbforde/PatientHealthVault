@@ -354,7 +354,7 @@ export function registerRoutes(app: Express): Server {
   });
 
 
-  // Add document upload endpoint with proper typing
+  // Update the document upload endpoint
   app.post("/api/documents", upload.single('file'), async (req: FileRequest, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     if (!req.file) return res.status(400).json({ message: "No file uploaded" });
@@ -364,8 +364,8 @@ export function registerRoutes(app: Express): Server {
         title: req.body.title,
         type: req.body.type,
         description: req.body.description || "",
-        content: req.file.buffer,
-        contentType: req.body.contentType,
+        content: req.file.buffer.toString('base64'), // Convert Buffer to base64 string
+        contentType: req.file.mimetype,
         patientUuid: req.body.patientUuid,
         uploadedBy: req.body.uploadedBy,
         uploadedAt: new Date(),
@@ -373,13 +373,19 @@ export function registerRoutes(app: Express): Server {
 
       console.log('Creating document:', {
         ...document,
-        content: `<Buffer length: ${req.file.buffer.length}>`
+        content: `<Base64 string length: ${document.content.length}>`
       });
 
       const savedDoc = await storage.createDocument(document);
       res.status(201).json(savedDoc);
     } catch (err) {
       console.error('Error uploading document:', err);
+      if (err instanceof ZodError) {
+        return res.status(400).json({
+          message: "Validation error",
+          errors: err.errors
+        });
+      }
       res.status(500).json({
         message: "Failed to upload document",
         error: err instanceof Error ? err.message : "Unknown error"

@@ -310,20 +310,34 @@ export class DatabaseStorage implements IStorage {
       .from(documents)
       .where(eq(documents.patientUuid, patientUuid))
       .orderBy(sql`${documents.uploadedAt} DESC`);
-    return docs;
+
+    // Remove content from response to reduce payload size
+    return docs.map(doc => ({
+      ...doc,
+      content: `<Base64 content: ${doc.content.length} bytes>`
+    }));
   }
 
   async createDocument(document: InsertDocument): Promise<Document> {
     console.log('Creating document:', {
       ...document,
-      content: document.content instanceof Buffer ? `<Buffer length: ${document.content.length}>` : document.content
+      content: `<Base64 content length: ${document.content.length}>`
     });
 
-    const [doc] = await db
-      .insert(documents)
-      .values(document)
-      .returning();
-    return doc;
+    try {
+      const [doc] = await db
+        .insert(documents)
+        .values(document)
+        .returning();
+
+      return {
+        ...doc,
+        content: `<Base64 content: ${doc.content.length} bytes>`
+      };
+    } catch (error) {
+      console.error('Error creating document:', error);
+      throw error;
+    }
   }
 
   // Implement new appointment methods

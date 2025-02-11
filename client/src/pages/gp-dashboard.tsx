@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { User, insertHealthRecordSchema, insertDocumentSchema, insertAppointmentSchema } from "@shared/schema";
+import { User, insertHealthRecordSchema, insertDocumentSchema, insertAppointmentSchema, type Document, type Appointment } from "@shared/schema";
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { NavBar } from "@/components/nav-bar";
@@ -48,6 +48,7 @@ export default function GPDashboard() {
   const [selectedDateTime, setSelectedDateTime] = useState<Date | null>(null);
   const [showAppointmentForm, setShowAppointmentForm] = useState(false);
   const [selectedTab, setSelectedTab] = useState("records");
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
 
   const lookupForm = useForm<z.infer<typeof patientCodeSchema>>({
     resolver: zodResolver(patientCodeSchema),
@@ -66,41 +67,43 @@ export default function GPDashboard() {
     },
   });
 
-  const documentForm = useForm({
+  const documentForm = useForm<z.infer<typeof insertDocumentSchema>>({
     resolver: zodResolver(insertDocumentSchema),
     defaultValues: {
       title: "",
-      type: "lab_result",
+      type: "lab_result" as const,
       description: "",
-      content: "",
+      content: undefined,
       contentType: "",
       isPrivate: false,
     },
   });
 
-  const appointmentForm = useForm({
+  const appointmentForm = useForm<z.infer<typeof insertAppointmentSchema>>({
     resolver: zodResolver(insertAppointmentSchema),
     defaultValues: {
-      type: "checkup",
+      type: "checkup" as const,
       datetime: new Date(),
       duration: 30,
       notes: "",
+      patientUuid: "",
+      gpUsername: "",
     },
   });
 
   const { data: patientRecords, isLoading: isLoadingRecords } = useQuery({
-    queryKey: ["/api/health-records", selectedPatient?.id],
-    enabled: !!selectedPatient,
+    queryKey: ["/api/health-records", selectedPatient?.uuid],
+    enabled: !!selectedPatient?.uuid,
   });
 
-  const { data: patientDocuments, isLoading: isLoadingDocuments } = useQuery({
-    queryKey: ["/api/documents", selectedPatient?.id],
-    enabled: !!selectedPatient,
+  const { data: patientDocuments, isLoading: isLoadingDocuments } = useQuery<Document[]>({
+    queryKey: ["/api/documents", selectedPatient?.uuid],
+    enabled: !!selectedPatient?.uuid,
   });
 
-  const { data: patientAppointments, isLoading: isLoadingAppointments } = useQuery({
-    queryKey: ["/api/appointments", selectedPatient?.id],
-    enabled: !!selectedPatient,
+  const { data: patientAppointments, isLoading: isLoadingAppointments } = useQuery<Appointment[]>({
+    queryKey: ["/api/appointments", selectedPatient?.uuid],
+    enabled: !!selectedPatient?.uuid,
   });
 
   const lookupMutation = useMutation({
@@ -121,7 +124,7 @@ export default function GPDashboard() {
     mutationFn: async (data: z.infer<typeof insertDocumentSchema>) => {
       if (!selectedPatient) throw new Error("No patient selected");
 
-      const file = data.content as File;
+      const file = data.content as unknown as File;
       if (!file) throw new Error("No file selected");
 
       const formData = new FormData();
@@ -133,58 +136,59 @@ export default function GPDashboard() {
       formData.append("uploadedBy", user?.username || "");
       formData.append("contentType", file.type);
 
-      console.log('Uploading document:', {
-        title: data.title,
-        type: data.type,
-        description: data.description,
-        fileName: file.name,
-        fileType: file.type,
-        fileSize: file.size
+      const xhr = new XMLHttpRequest();
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const progress = (event.loaded / event.total) * 100;
+          setUploadProgress(progress);
+        }
+      };
+
+      return new Promise((resolve, reject) => {
+        xhr.onload = () => {
+          if (xhr.status === 200 || xhr.status === 201) {
+            resolve(JSON.parse(xhr.responseText));
+          } else {
+            reject(new Error(xhr.responseText || 'Upload failed'));
+          }
+        };
+        xhr.onerror = () => reject(new Error('Network error'));
+
+        xhr.open('POST', '/api/documents');
+        xhr.send(formData);
       });
-
-      const res = await fetch('/api/documents', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const error = await res.text();
-        console.error('Upload failed:', error);
-        throw new Error(error || 'Failed to upload document');
-      }
-
-      return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/documents", selectedPatient?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/documents", selectedPatient?.uuid] });
       toast({
         title: "Success",
         description: "Document uploaded successfully",
       });
       documentForm.reset();
+      setUploadProgress(0);
     },
     onError: (error: Error) => {
-      console.error('Document upload error:', error);
       toast({
         title: "Upload Failed",
         description: error.message || "Failed to upload document",
         variant: "destructive",
       });
+      setUploadProgress(0);
     },
   });
 
   const createAppointmentMutation = useMutation({
     mutationFn: async (data: z.infer<typeof insertAppointmentSchema>) => {
-      if (!selectedPatient) throw new Error("No patient selected");
+      if (!selectedPatient?.uuid) throw new Error("No patient selected");
+      if (!user?.username) throw new Error("No GP username available");
 
       const appointment = {
         ...data,
         patientUuid: selectedPatient.uuid,
-        gpUsername: user?.username,
-        status: "scheduled"
+        gpUsername: user.username,
+        status: "scheduled" as const
       };
 
-      console.log('Creating appointment:', appointment);
       const res = await apiRequest("POST", "/api/appointments", appointment);
       if (!res.ok) {
         throw new Error('Failed to create appointment');
@@ -192,13 +196,14 @@ export default function GPDashboard() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/appointments", selectedPatient?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/appointments", selectedPatient?.uuid] });
       toast({
         title: "Success",
         description: "Appointment scheduled successfully",
       });
       appointmentForm.reset();
       setShowAppointmentForm(false);
+      setSelectedDateTime(null);
     },
     onError: (error: Error) => {
       toast({
@@ -227,7 +232,11 @@ export default function GPDashboard() {
   }
 
   const AppointmentsTab = () => {
-    const handleDateSelect = (selectInfo: any) => {
+    const handleDateSelect = (selectInfo: {
+      start: Date;
+      end: Date;
+      view: { calendar: { unselect: () => void } };
+    }) => {
       const start = new Date(selectInfo.start);
       // Only allow future appointments
       if (start > new Date()) {
@@ -263,8 +272,9 @@ export default function GPDashboard() {
               start: new Date(apt.datetime),
               end: new Date(new Date(apt.datetime).getTime() + apt.duration * 60000),
               backgroundColor: apt.status === 'scheduled' ? '#3b82f6' :
-                apt.status === 'completed' ? '#10b981' : '#ef4444'
-            }))}
+                apt.status === 'completed' ? '#10b981' : '#ef4444',
+              className: `status-${apt.status}`
+            })) ?? []}
             slotMinTime="08:00:00"
             slotMaxTime="18:00:00"
             allDaySlot={false}
@@ -273,6 +283,21 @@ export default function GPDashboard() {
               daysOfWeek: [1, 2, 3, 4, 5],
               startTime: '08:00',
               endTime: '18:00',
+            }}
+            selectConstraint="businessHours"
+            validRange={{
+              start: new Date()
+            }}
+            eventContent={(eventInfo) => {
+              return (
+                <div className="p-1">
+                  <div className="text-xs font-semibold">{eventInfo.event.title}</div>
+                  <div className="text-xs">
+                    {format(eventInfo.event.start!, "HH:mm")} - 
+                    {format(eventInfo.event.end!, "HH:mm")}
+                  </div>
+                </div>
+              );
             }}
           />
         </div>
@@ -287,8 +312,25 @@ export default function GPDashboard() {
             </CardHeader>
             <CardContent>
               <Form {...appointmentForm}>
-                <form onSubmit={appointmentForm.handleSubmit((data) => createAppointmentMutation.mutate(data))}
-                      className="space-y-4">
+                <form onSubmit={appointmentForm.handleSubmit((data) => {
+                  if (!selectedPatient?.uuid || !user?.username) {
+                    toast({
+                      title: "Error",
+                      description: "Missing required information",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+
+                  const appointmentData = {
+                    ...data,
+                    type: data.type as "checkup" | "follow_up" | "consultation" | "other",
+                    patientUuid: selectedPatient.uuid,
+                    gpUsername: user.username,
+                    datetime: selectedDateTime,
+                  };
+                  createAppointmentMutation.mutate(appointmentData);
+                })} className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <FormField
                       control={appointmentForm.control}
@@ -564,7 +606,7 @@ export default function GPDashboard() {
                           <FormField
                             control={documentForm.control}
                             name="content"
-                            render={({ field: { value, onChange, ...field } }) => (
+                            render={({ field: { onChange, ...field } }) => (
                               <FormItem>
                                 <FormLabel>Upload Document</FormLabel>
                                 <FormControl>
@@ -584,6 +626,14 @@ export default function GPDashboard() {
                               </FormItem>
                             )}
                           />
+                          {uploadProgress > 0 && uploadProgress < 100 && (
+                            <div className="w-full bg-gray-200 rounded-full h-2.5">
+                              <div
+                                className="bg-blue-600 h-2.5 rounded-full"
+                                style={{ width: `${uploadProgress}%` }}
+                              ></div>
+                            </div>
+                          )}
                           <Button
                             type="submit"
                             disabled={createDocumentMutation.isPending}
