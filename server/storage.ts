@@ -1,6 +1,6 @@
 import { users, healthRecords, documents, appointments, type User, type InsertUser, type HealthRecord, type InsertHealthRecord, type Document, type InsertDocument, type Appointment, type InsertAppointment } from "@shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, and, or, sql } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
@@ -190,7 +190,7 @@ export class DatabaseStorage implements IStorage {
     const recordToCreate = {
       ...record,
       patientUuid: patient.uuid,
-      sharedWith: [{ 
+      sharedWith: [{
         username: patient.username,
         accessGrantedAt: new Date(),
         accessLevel: "view"
@@ -309,12 +309,16 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(documents)
       .where(eq(documents.patientUuid, patientUuid))
-      .orderBy(documents.uploadedAt);
+      .orderBy(sql`${documents.uploadedAt} DESC`);
     return docs;
   }
 
   async createDocument(document: InsertDocument): Promise<Document> {
-    console.log('Creating document:', document);
+    console.log('Creating document:', {
+      ...document,
+      content: document.content instanceof Buffer ? `<Buffer length: ${document.content.length}>` : document.content
+    });
+
     const [doc] = await db
       .insert(documents)
       .values(document)
@@ -329,7 +333,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(appointments)
       .where(eq(appointments.patientUuid, patientUuid))
-      .orderBy(appointments.datetime);
+      .orderBy(sql`${appointments.datetime} ASC`);
     return appts;
   }
 
@@ -339,7 +343,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(appointments)
       .where(eq(appointments.gpUsername, gpUsername))
-      .orderBy(appointments.datetime);
+      .orderBy(sql`${appointments.datetime} ASC`);
     return appts;
   }
 
