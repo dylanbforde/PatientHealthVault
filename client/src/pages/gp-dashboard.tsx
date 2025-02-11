@@ -25,12 +25,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { format } from "date-fns";
+import FullCalendar from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import timeGridPlugin from '@fullcalendar/timegrid';
+import interactionPlugin from '@fullcalendar/interaction';
 
 const patientCodeSchema = z.object({
   patientCode: z.string().min(1, "Patient code is required"),
 });
 
-// Update the health record schema to include private notes
 const gpHealthRecordSchema = z.object({
   notes: z.string().min(1, "Medical notes are required"),
   privateNotes: z.string().optional(),
@@ -83,19 +86,16 @@ export default function GPDashboard() {
     },
   });
 
-  // Query to fetch patient records when a patient is selected
   const { data: patientRecords, isLoading: isLoadingRecords } = useQuery({
     queryKey: ["/api/health-records", selectedPatient?.id],
     enabled: !!selectedPatient,
   });
 
-  // Query to fetch patient documents
   const { data: patientDocuments, isLoading: isLoadingDocuments } = useQuery({
     queryKey: ["/api/documents", selectedPatient?.id],
     enabled: !!selectedPatient,
   });
 
-  // Query to fetch patient appointments
   const { data: patientAppointments, isLoading: isLoadingAppointments } = useQuery({
     queryKey: ["/api/appointments", selectedPatient?.id],
     enabled: !!selectedPatient,
@@ -118,15 +118,26 @@ export default function GPDashboard() {
   const createDocumentMutation = useMutation({
     mutationFn: async (data: z.infer<typeof insertDocumentSchema>) => {
       if (!selectedPatient) throw new Error("No patient selected");
-      const formData = new FormData();
-      formData.append("file", data.content);
-      formData.append("data", JSON.stringify({
-        ...data,
-        patientUuid: selectedPatient.uuid,
-        uploadedBy: user?.username,
-      }));
 
-      const res = await apiRequest("POST", "/api/documents", formData);
+      const formData = new FormData();
+      const file = data.content as File;
+      formData.append("file", file);
+      formData.append("title", data.title);
+      formData.append("type", data.type);
+      formData.append("description", data.description || "");
+      formData.append("patientUuid", selectedPatient.uuid);
+      formData.append("uploadedBy", user?.username || "");
+      formData.append("contentType", file.type);
+
+      const res = await fetch('/api/documents', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to upload document');
+      }
+
       return res.json();
     },
     onSuccess: () => {
@@ -136,6 +147,13 @@ export default function GPDashboard() {
         description: "The document has been uploaded successfully.",
       });
       documentForm.reset();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Upload Failed",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -178,12 +196,152 @@ export default function GPDashboard() {
     );
   }
 
+  const handleDateSelect = (selectInfo: any) => {
+    const calendarApi = selectInfo.view.calendar;
+    calendarApi.unselect();
+
+    appointmentForm.setValue("datetime", selectInfo.start);
+  };
+
+  const AppointmentsTab = () => (
+    <div className="space-y-4">
+      <div className="rounded-lg border p-4">
+        <FullCalendar
+          plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+          initialView="timeGridWeek"
+          selectable={true}
+          select={handleDateSelect}
+          headerToolbar={{
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,timeGridDay'
+          }}
+          events={patientAppointments?.map(apt => ({
+            id: apt.id.toString(),
+            title: `${apt.type} - ${selectedPatient?.fullName}`,
+            start: new Date(apt.datetime),
+            end: new Date(new Date(apt.datetime).getTime() + apt.duration * 60000),
+            backgroundColor: apt.status === 'scheduled' ? '#3b82f6' :
+              apt.status === 'completed' ? '#10b981' : '#ef4444'
+          }))}
+          slotMinTime="08:00:00"
+          slotMaxTime="18:00:00"
+          allDaySlot={false}
+          slotDuration="00:15:00"
+          businessHours={{
+            daysOfWeek: [1, 2, 3, 4, 5],
+            startTime: '08:00',
+            endTime: '18:00',
+          }}
+        />
+      </div>
+      <Form {...appointmentForm}>
+        <form onSubmit={appointmentForm.handleSubmit((data) => createAppointmentMutation.mutate(data))} className="space-y-4">
+          <FormField
+            control={appointmentForm.control}
+            name="type"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Appointment Type</FormLabel>
+                <FormControl>
+                  <select
+                    {...field}
+                    className="w-full p-2 border rounded"
+                  >
+                    <option value="checkup">Check-up</option>
+                    <option value="follow_up">Follow-up</option>
+                    <option value="consultation">Consultation</option>
+                    <option value="other">Other</option>
+                  </select>
+                </FormControl>
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={appointmentForm.control}
+            name="duration"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Duration (minutes)</FormLabel>
+                <FormControl>
+                  <select
+                    {...field}
+                    className="w-full p-2 border rounded"
+                    onChange={(e) => field.onChange(parseInt(e.target.value))}
+                  >
+                    <option value="15">15 minutes</option>
+                    <option value="30">30 minutes</option>
+                    <option value="45">45 minutes</option>
+                    <option value="60">1 hour</option>
+                  </select>
+                </FormControl>
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={appointmentForm.control}
+            name="notes"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Notes</FormLabel>
+                <FormControl>
+                  <Textarea {...field} placeholder="Enter appointment notes" />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+          <Button
+            type="submit"
+            disabled={createAppointmentMutation.isPending}
+            className="w-full"
+          >
+            {createAppointmentMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Schedule Appointment
+          </Button>
+        </form>
+      </Form>
+
+      <div className="mt-8">
+        <h3 className="text-lg font-semibold mb-4">Upcoming Appointments</h3>
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date & Time</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Duration</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {patientAppointments?.map((appointment) => (
+                <TableRow key={appointment.id}>
+                  <TableCell>{format(new Date(appointment.datetime), "PPp")}</TableCell>
+                  <TableCell>{appointment.type}</TableCell>
+                  <TableCell>{appointment.duration} mins</TableCell>
+                  <TableCell>
+                    <span className={`px-2 py-1 rounded-full text-xs ${
+                      appointment.status === "scheduled" ? "bg-blue-100 text-blue-800" :
+                        appointment.status === "completed" ? "bg-green-100 text-green-800" :
+                          "bg-red-100 text-red-800"
+                    }`}>
+                      {appointment.status}
+                    </span>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <AnimatedLayout>
       <NavBar />
       <main className="container mx-auto px-4 py-8">
         <div className="space-y-8">
-          {/* Patient Lookup Card */}
           <Card>
             <CardHeader>
               <CardTitle className="font-mono tracking-wider uppercase flex items-center gap-2">
@@ -229,7 +387,6 @@ export default function GPDashboard() {
             </CardContent>
           </Card>
 
-          {/* Patient Management Tabs */}
           {selectedPatient && (
             <Card>
               <CardHeader>
@@ -246,7 +403,6 @@ export default function GPDashboard() {
                     <TabsTrigger value="appointments">Appointments</TabsTrigger>
                   </TabsList>
 
-                  {/* Records Tab */}
                   <TabsContent value="records">
                     <div className="space-y-4">
                       <div className="rounded-md border">
@@ -282,7 +438,6 @@ export default function GPDashboard() {
                     </div>
                   </TabsContent>
 
-                  {/* Documents Tab */}
                   <TabsContent value="documents">
                     <div className="space-y-4">
                       <Form {...documentForm}>
@@ -366,7 +521,6 @@ export default function GPDashboard() {
                         </form>
                       </Form>
 
-                      {/* List of uploaded documents */}
                       <div className="mt-8">
                         <h3 className="text-lg font-semibold mb-4">Uploaded Documents</h3>
                         <div className="rounded-md border">
@@ -395,127 +549,8 @@ export default function GPDashboard() {
                     </div>
                   </TabsContent>
 
-                  {/* Appointments Tab */}
                   <TabsContent value="appointments">
-                    <div className="space-y-4">
-                      <Form {...appointmentForm}>
-                        <form onSubmit={appointmentForm.handleSubmit((data) => createAppointmentMutation.mutate(data))} className="space-y-4">
-                          <div className="grid grid-cols-2 gap-4">
-                            <FormField
-                              control={appointmentForm.control}
-                              name="datetime"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Date & Time</FormLabel>
-                                  <FormControl>
-                                    <Input
-                                      type="datetime-local"
-                                      {...field}
-                                      value={field.value instanceof Date ? field.value.toISOString().slice(0, 16) : ""}
-                                      onChange={(e) => field.onChange(new Date(e.target.value))}
-                                    />
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={appointmentForm.control}
-                              name="type"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Appointment Type</FormLabel>
-                                  <FormControl>
-                                    <select
-                                      {...field}
-                                      className="w-full p-2 border rounded"
-                                    >
-                                      <option value="checkup">Check-up</option>
-                                      <option value="follow_up">Follow-up</option>
-                                      <option value="consultation">Consultation</option>
-                                      <option value="other">Other</option>
-                                    </select>
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                          </div>
-                          <FormField
-                            control={appointmentForm.control}
-                            name="duration"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Duration (minutes)</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    type="number"
-                                    {...field}
-                                    onChange={(e) => field.onChange(parseInt(e.target.value))}
-                                    min="15"
-                                    max="120"
-                                    step="15"
-                                  />
-                                </FormControl>
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={appointmentForm.control}
-                            name="notes"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Notes</FormLabel>
-                                <FormControl>
-                                  <Textarea {...field} placeholder="Enter appointment notes" />
-                                </FormControl>
-                              </FormItem>
-                            )}
-                          />
-                          <Button
-                            type="submit"
-                            disabled={createAppointmentMutation.isPending}
-                            className="w-full"
-                          >
-                            {createAppointmentMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Schedule Appointment
-                          </Button>
-                        </form>
-                      </Form>
-
-                      {/* List of appointments */}
-                      <div className="mt-8">
-                        <h3 className="text-lg font-semibold mb-4">Scheduled Appointments</h3>
-                        <div className="rounded-md border">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Date & Time</TableHead>
-                                <TableHead>Type</TableHead>
-                                <TableHead>Duration</TableHead>
-                                <TableHead>Status</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {patientAppointments?.map((appointment) => (
-                                <TableRow key={appointment.id}>
-                                  <TableCell>{format(new Date(appointment.datetime), "PPp")}</TableCell>
-                                  <TableCell>{appointment.type}</TableCell>
-                                  <TableCell>{appointment.duration} mins</TableCell>
-                                  <TableCell>
-                                    <span className={`px-2 py-1 rounded-full text-xs ${
-                                      appointment.status === "scheduled" ? "bg-blue-100 text-blue-800" :
-                                        appointment.status === "completed" ? "bg-green-100 text-green-800" :
-                                          "bg-red-100 text-red-800"
-                                    }`}>
-                                      {appointment.status}
-                                    </span>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      </div>
-                    </div>
+                    <AppointmentsTab />
                   </TabsContent>
                 </Tabs>
               </CardContent>

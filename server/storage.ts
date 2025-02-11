@@ -1,6 +1,6 @@
-import { users, healthRecords, type User, type InsertUser, type HealthRecord, type InsertHealthRecord } from "@shared/schema";
+import { users, healthRecords, documents, appointments, type User, type InsertUser, type HealthRecord, type InsertHealthRecord, type Document, type InsertDocument, type Appointment, type InsertAppointment } from "@shared/schema";
 import { db } from "./db";
-import { eq, or, and, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
@@ -9,6 +9,7 @@ import { randomBytes } from "crypto";
 const PostgresStore = connectPg(session);
 
 export interface IStorage {
+  // Existing methods
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByPatientCode(patientCode: string): Promise<User | undefined>;
@@ -16,7 +17,6 @@ export interface IStorage {
   updateUserPublicKey(userId: number, publicKey: string): Promise<User>;
   updateUser(id: number, data: Partial<User>): Promise<User>;
   generateUniquePatientCode(): Promise<string>;
-
   getHealthRecords(userId: number): Promise<HealthRecord[]>;
   getHealthRecord(id: number): Promise<HealthRecord | undefined>;
   createHealthRecord(record: InsertHealthRecord): Promise<HealthRecord>;
@@ -25,6 +25,16 @@ export interface IStorage {
   updateEmergencyAccess(id: number, isEmergencyAccessible: boolean): Promise<HealthRecord>;
   verifyHealthRecord(id: number, verifiedBy: string): Promise<HealthRecord>;
   getSharedRecords(username: string): Promise<HealthRecord[]>;
+
+  // New methods for documents
+  getPatientDocuments(patientUuid: string): Promise<Document[]>;
+  createDocument(document: InsertDocument): Promise<Document>;
+
+  // New methods for appointments
+  getPatientAppointments(patientUuid: string): Promise<Appointment[]>;
+  getGPAppointments(gpUsername: string): Promise<Appointment[]>;
+  createAppointment(appointment: InsertAppointment): Promise<Appointment>;
+  updateAppointmentStatus(id: number, status: string): Promise<Appointment>;
 
   sessionStore: session.Store;
 }
@@ -290,6 +300,65 @@ export class DatabaseStorage implements IStorage {
       .orderBy(sql`${healthRecords.date} DESC`);
 
     return records;
+  }
+
+  // Implement new document methods
+  async getPatientDocuments(patientUuid: string): Promise<Document[]> {
+    console.log('Fetching documents for patient:', patientUuid);
+    const docs = await db
+      .select()
+      .from(documents)
+      .where(eq(documents.patientUuid, patientUuid))
+      .orderBy(documents.uploadedAt);
+    return docs;
+  }
+
+  async createDocument(document: InsertDocument): Promise<Document> {
+    console.log('Creating document:', document);
+    const [doc] = await db
+      .insert(documents)
+      .values(document)
+      .returning();
+    return doc;
+  }
+
+  // Implement new appointment methods
+  async getPatientAppointments(patientUuid: string): Promise<Appointment[]> {
+    console.log('Fetching appointments for patient:', patientUuid);
+    const appts = await db
+      .select()
+      .from(appointments)
+      .where(eq(appointments.patientUuid, patientUuid))
+      .orderBy(appointments.datetime);
+    return appts;
+  }
+
+  async getGPAppointments(gpUsername: string): Promise<Appointment[]> {
+    console.log('Fetching appointments for GP:', gpUsername);
+    const appts = await db
+      .select()
+      .from(appointments)
+      .where(eq(appointments.gpUsername, gpUsername))
+      .orderBy(appointments.datetime);
+    return appts;
+  }
+
+  async createAppointment(appointment: InsertAppointment): Promise<Appointment> {
+    console.log('Creating appointment:', appointment);
+    const [appt] = await db
+      .insert(appointments)
+      .values(appointment)
+      .returning();
+    return appt;
+  }
+
+  async updateAppointmentStatus(id: number, status: string): Promise<Appointment> {
+    const [appt] = await db
+      .update(appointments)
+      .set({ status })
+      .where(eq(appointments.id, id))
+      .returning();
+    return appt;
   }
 }
 
