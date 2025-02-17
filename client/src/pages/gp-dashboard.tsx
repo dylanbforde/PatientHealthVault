@@ -122,7 +122,8 @@ export default function GPDashboard() {
 
   const createDocumentMutation = useMutation({
     mutationFn: async (data: z.infer<typeof insertDocumentSchema>) => {
-      if (!selectedPatient) throw new Error("No patient selected");
+      if (!selectedPatient?.uuid) throw new Error("No patient selected");
+      if (!user?.username) throw new Error("No GP username available");
 
       const file = data.content as unknown as File;
       if (!file) throw new Error("No file selected");
@@ -133,8 +134,9 @@ export default function GPDashboard() {
       formData.append("type", data.type);
       formData.append("description", data.description || "");
       formData.append("patientUuid", selectedPatient.uuid);
-      formData.append("uploadedBy", user?.username || "");
+      formData.append("uploadedBy", user.username);
       formData.append("contentType", file.type);
+      formData.append("isPrivate", String(data.isPrivate));
 
       const xhr = new XMLHttpRequest();
       xhr.upload.onprogress = (event) => {
@@ -153,8 +155,8 @@ export default function GPDashboard() {
           }
         };
         xhr.onerror = () => reject(new Error('Network error'));
-
-        xhr.open('POST', '/api/documents');
+        xhr.withCredentials = true; // Include credentials for session
+        xhr.open('POST', '/api/documents', true);
         xhr.send(formData);
       });
     },
@@ -168,6 +170,7 @@ export default function GPDashboard() {
       setUploadProgress(0);
     },
     onError: (error: Error) => {
+      console.error('Document upload error:', error);
       toast({
         title: "Upload Failed",
         description: error.message || "Failed to upload document",
@@ -293,7 +296,7 @@ export default function GPDashboard() {
                 <div className="p-1">
                   <div className="text-xs font-semibold">{eventInfo.event.title}</div>
                   <div className="text-xs">
-                    {format(eventInfo.event.start!, "HH:mm")} - 
+                    {format(eventInfo.event.start!, "HH:mm")} -
                     {format(eventInfo.event.end!, "HH:mm")}
                   </div>
                 </div>
@@ -617,21 +620,30 @@ export default function GPDashboard() {
                                       if (file) {
                                         onChange(file);
                                         documentForm.setValue("contentType", file.type);
+                                        console.log('Selected file:', file.name, 'type:', file.type);
                                       }
                                     }}
                                     {...field}
                                     value={undefined}
+                                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
                                   />
                                 </FormControl>
+                                <FormDescription>
+                                  Supported formats: PDF, Images (JPEG, PNG), Documents (DOC, DOCX)
+                                </FormDescription>
                               </FormItem>
                             )}
                           />
                           {uploadProgress > 0 && uploadProgress < 100 && (
-                            <div className="w-full bg-gray-200 rounded-full h-2.5">
+                            <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
                               <div
-                                className="bg-blue-600 h-2.5 rounded-full"
+                                className="bg-primary h-2.5 rounded-full transition-all duration-300"
                                 style={{ width: `${uploadProgress}%` }}
-                              ></div>
+                              >
+                                <span className="text-xs text-white absolute right-0 -top-6">
+                                  {Math.round(uploadProgress)}%
+                                </span>
+                              </div>
                             </div>
                           )}
                           <Button

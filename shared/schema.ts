@@ -125,11 +125,10 @@ export const appointments = pgTable("appointments", {
 
 // Document insert schema
 export const insertDocumentSchema = createInsertSchema(documents).extend({
-  content: z.instanceof(Buffer).or(z.string()).transform((val) =>
-    val instanceof Buffer ? val.toString('base64') : val
-  ),
+  content: z.string().transform((val) => val),
   type: z.enum(["lab_result", "prescription", "imaging", "other"]),
   contentType: z.string().min(1, "Content type is required"),
+  isPrivate: z.boolean().default(false),
 });
 
 // Appointment insert schema
