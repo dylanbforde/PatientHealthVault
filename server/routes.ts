@@ -360,6 +360,13 @@ export function registerRoutes(app: Express): Server {
     if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
     try {
+      console.log('Processing document upload:', {
+        fileName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        size: req.file.size,
+        formData: req.body
+      });
+
       const document = {
         title: req.body.title,
         type: req.body.type,
@@ -369,6 +376,7 @@ export function registerRoutes(app: Express): Server {
         patientUuid: req.body.patientUuid,
         uploadedBy: req.body.uploadedBy,
         uploadedAt: new Date(),
+        isPrivate: req.body.isPrivate === 'true'
       };
 
       console.log('Creating document:', {
