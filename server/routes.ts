@@ -1,21 +1,12 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
-import multer from "multer";
-import { setupAuth, hashPassword } from "./auth";
+import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { insertHealthRecordSchema, insertDocumentSchema, insertAppointmentSchema } from "@shared/schema";
+import { insertHealthRecordSchema } from "@shared/schema";
 import { ZodError } from "zod";
-import { eq, and, or, sql } from "drizzle-orm";
-import { db } from "./db";
-import { users } from "@shared/schema";
+import { generateKeyPair, signRecord, verifyRecord } from "./crypto";
+import { hashPassword } from "./auth"; // Added import for hashPassword
 
-// Configure multer for file uploads
-const upload = multer({ storage: multer.memoryStorage() });
-
-// Define custom Request type with file handling
-interface FileRequest extends Request {
-  file?: Express.Multer.File;
-}
 
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
@@ -23,7 +14,12 @@ export function registerRoutes(app: Express): Server {
   // Generate key pair for user
   app.post("/api/users/generate-keys", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    res.json({ publicKey: "", privateKey: "" }); // Placeholder for crypto implementation
+
+    const { publicKey, privateKey } = generateKeyPair();
+    await storage.updateUserPublicKey(req.user.id, publicKey);
+
+    // Only send private key once - it should be stored securely by the client
+    res.json({ publicKey, privateKey });
   });
 
   app.get("/api/health-records", async (req, res) => {
@@ -72,9 +68,9 @@ export function registerRoutes(app: Express): Server {
           errors: err.errors
         });
       } else {
-        return res.status(500).json({
+        return res.status(500).json({ 
           message: "Internal server error",
-          error: err instanceof Error ? err.message : "Unknown error"
+          error: err instanceof Error ? err.message : "Unknown error" 
         });
       }
     }
@@ -94,9 +90,9 @@ export function registerRoutes(app: Express): Server {
       res.json(patient);
     } catch (err) {
       console.error('Error looking up patient:', err);
-      res.status(500).json({
+      res.status(500).json({ 
         message: "Failed to lookup patient",
-        error: err instanceof Error ? err.message : "Unknown error"
+        error: err instanceof Error ? err.message : "Unknown error" 
       });
     }
   });
@@ -116,9 +112,9 @@ export function registerRoutes(app: Express): Server {
       res.json(updatedRecord);
     } catch (err) {
       console.error('Error accepting record:', err);
-      res.status(500).json({
+      res.status(500).json({ 
         message: "Failed to accept record",
-        error: err instanceof Error ? err.message : "Unknown error"
+        error: err instanceof Error ? err.message : "Unknown error" 
       });
     }
   });
@@ -137,9 +133,9 @@ export function registerRoutes(app: Express): Server {
       res.json(updatedRecord);
     } catch (err) {
       console.error('Error rejecting record:', err);
-      res.status(500).json({
+      res.status(500).json({ 
         message: "Failed to reject record",
-        error: err instanceof Error ? err.message : "Unknown error"
+        error: err instanceof Error ? err.message : "Unknown error" 
       });
     }
   });
@@ -152,9 +148,9 @@ export function registerRoutes(app: Express): Server {
       res.json(records);
     } catch (err) {
       console.error('Error fetching shared records:', err);
-      res.status(500).json({
+      res.status(500).json({ 
         message: "Failed to fetch shared records",
-        error: err instanceof Error ? err.message : "Unknown error"
+        error: err instanceof Error ? err.message : "Unknown error" 
       });
     }
   });
@@ -214,7 +210,7 @@ export function registerRoutes(app: Express): Server {
       // Remove any existing share for this user and add the new one
       const updatedRecord = await storage.updateHealthRecordSharing(
         recordId,
-        record.sharedWith ?
+        record.sharedWith ? 
           record.sharedWith.filter(s => s.username !== username).concat(newShare) :
           [newShare]
       );
@@ -222,9 +218,9 @@ export function registerRoutes(app: Express): Server {
       res.json(updatedRecord);
     } catch (err) {
       console.error('Error sharing record:', err);
-      res.status(500).json({
+      res.status(500).json({ 
         message: "Failed to share record",
-        error: err instanceof Error ? err.message : "Unknown error"
+        error: err instanceof Error ? err.message : "Unknown error" 
       });
     }
   });
@@ -251,9 +247,9 @@ export function registerRoutes(app: Express): Server {
       res.json(updatedRecord);
     } catch (err) {
       console.error('Error revoking access:', err);
-      res.status(500).json({
+      res.status(500).json({ 
         message: "Failed to revoke access",
-        error: err instanceof Error ? err.message : "Unknown error"
+        error: err instanceof Error ? err.message : "Unknown error" 
       });
     }
   });
@@ -278,7 +274,7 @@ export function registerRoutes(app: Express): Server {
         for (const contact of emergencyContacts) {
           const targetUser = await storage.getUserByUsername(contact.username);
           if (!targetUser) {
-            return res.status(400).json({
+            return res.status(400).json({ 
               message: `User not found: ${contact.username}`,
               field: "emergencyContacts"
             });
@@ -300,9 +296,9 @@ export function registerRoutes(app: Express): Server {
       res.json(updatedUser);
     } catch (err) {
       console.error('Error updating user:', err);
-      res.status(500).json({
+      res.status(500).json({ 
         message: "Failed to update user",
-        error: err instanceof Error ? err.message : "Unknown error"
+        error: err instanceof Error ? err.message : "Unknown error" 
       });
     }
   });
@@ -323,9 +319,9 @@ export function registerRoutes(app: Express): Server {
       res.json(updatedRecord);
     } catch (err) {
       console.error('Error updating emergency access:', err);
-      res.status(500).json({
+      res.status(500).json({ 
         message: "Failed to update emergency access",
-        error: err instanceof Error ? err.message : "Unknown error"
+        error: err instanceof Error ? err.message : "Unknown error" 
       });
     }
   });
@@ -355,106 +351,6 @@ export function registerRoutes(app: Express): Server {
     });
   });
 
-
-  // Update the document upload endpoint
-  app.post("/api/documents", upload.single('file'), async (req: FileRequest, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-
-    try {
-      console.log('Processing document upload:', {
-        fileName: req.file?.originalname,
-        mimeType: req.file?.mimetype,
-        size: req.file?.size,
-        formData: req.body
-      });
-
-      // Validate required fields
-      if (!req.body.patientUuid || !req.body.title || !req.body.type) {
-        return res.status(400).json({
-          message: "Missing required fields",
-          required: ['patientUuid', 'title', 'type']
-        });
-      }
-
-      // Get patient info to properly set up sharing
-      const [patient] = await db
-        .select()
-        .from(users)
-        .where(eq(users.uuid, req.body.patientUuid));
-
-      if (!patient) {
-        return res.status(404).json({ message: "Patient not found" });
-      }
-
-      const document = {
-        title: req.body.title,
-        type: req.body.type,
-        description: req.body.description || "",
-        content: req.file ? req.file.buffer.toString('base64') : null,
-        contentType: req.file?.mimetype,
-        patientUuid: req.body.patientUuid,
-        uploadedBy: req.user.username, // Use the authenticated user's username
-        uploadedAt: new Date(),
-        isPrivate: req.body.isPrivate === 'true',
-        sharedWith: [{
-          username: patient.username,
-          accessGrantedAt: new Date(),
-          accessLevel: "view" as const // Explicitly type as const to match schema
-        }]
-      };
-
-      console.log('Creating document:', {
-        ...document,
-        content: document.content ? `<Base64 string length: ${document.content.length}>` : 'No content'
-      });
-
-      const savedDoc = await storage.createDocument(document);
-
-      // Send success response with document info but without content
-      const { content, ...docWithoutContent } = savedDoc;
-      res.status(201).json(docWithoutContent);
-    } catch (err) {
-      console.error('Error uploading document:', err);
-      if (err instanceof ZodError) {
-        return res.status(400).json({
-          message: "Validation error",
-          errors: err.errors
-        });
-      }
-      res.status(500).json({
-        message: "Failed to upload document",
-        error: err instanceof Error ? err.message : "Unknown error"
-      });
-    }
-  });
-
-  // Add appointment endpoints
-  app.post("/api/appointments", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-
-    try {
-      const appointmentData = insertAppointmentSchema.parse({
-        ...req.body,
-        datetime: new Date(req.body.datetime)
-      });
-
-      console.log('Creating appointment:', appointmentData);
-      const appointment = await storage.createAppointment(appointmentData);
-      res.status(201).json(appointment);
-    } catch (err) {
-      console.error('Error creating appointment:', err);
-      if (err instanceof ZodError) {
-        return res.status(400).json({
-          message: "Validation error",
-          errors: err.errors
-        });
-      }
-      res.status(500).json({
-        message: "Failed to create appointment",
-        error: err instanceof Error ? err.message : "Unknown error"
-      });
-    }
-  });
 
   const httpServer = createServer(app);
   return httpServer;

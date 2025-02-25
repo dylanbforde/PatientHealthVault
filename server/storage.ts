@@ -1,6 +1,6 @@
-import { users, healthRecords, documents, appointments, type User, type InsertUser, type HealthRecord, type InsertHealthRecord, type Document, type InsertDocument, type Appointment, type InsertAppointment } from "@shared/schema";
+import { users, healthRecords, type User, type InsertUser, type HealthRecord, type InsertHealthRecord } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, or, sql } from "drizzle-orm";
+import { eq, or, and, sql } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
@@ -9,7 +9,6 @@ import { randomBytes } from "crypto";
 const PostgresStore = connectPg(session);
 
 export interface IStorage {
-  // Existing methods
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByPatientCode(patientCode: string): Promise<User | undefined>;
@@ -17,6 +16,7 @@ export interface IStorage {
   updateUserPublicKey(userId: number, publicKey: string): Promise<User>;
   updateUser(id: number, data: Partial<User>): Promise<User>;
   generateUniquePatientCode(): Promise<string>;
+
   getHealthRecords(userId: number): Promise<HealthRecord[]>;
   getHealthRecord(id: number): Promise<HealthRecord | undefined>;
   createHealthRecord(record: InsertHealthRecord): Promise<HealthRecord>;
@@ -25,16 +25,6 @@ export interface IStorage {
   updateEmergencyAccess(id: number, isEmergencyAccessible: boolean): Promise<HealthRecord>;
   verifyHealthRecord(id: number, verifiedBy: string): Promise<HealthRecord>;
   getSharedRecords(username: string): Promise<HealthRecord[]>;
-
-  // New methods for documents
-  getPatientDocuments(patientUuid: string): Promise<Document[]>;
-  createDocument(document: InsertDocument): Promise<Document>;
-
-  // New methods for appointments
-  getPatientAppointments(patientUuid: string): Promise<Appointment[]>;
-  getGPAppointments(gpUsername: string): Promise<Appointment[]>;
-  createAppointment(appointment: InsertAppointment): Promise<Appointment>;
-  updateAppointmentStatus(id: number, status: string): Promise<Appointment>;
 
   sessionStore: session.Store;
 }
@@ -50,29 +40,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByPatientCode(patientCode: string): Promise<User | undefined> {
-    try {
-      const [user] = await db
-        .select({
-          id: users.id,
-          username: users.username,
-          fullName: users.fullName,
-          isGP: users.isGP,
-          patientCode: users.patientCode,
-          bloodType: users.bloodType,
-          allergies: users.allergies,
-          emergencyContacts: users.emergencyContacts,
-          gpUsername: users.gpUsername,
-          gpName: users.gpName,
-          gpContact: users.gpContact,
-        })
-        .from(users)
-        .where(eq(users.patientCode, patientCode));
+    console.log('Looking up user by patient code:', patientCode);
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.patientCode, patientCode));
 
-      return user;
-    } catch (error) {
-      console.error('Error in getUserByPatientCode:', error instanceof Error ? error.message : 'Unknown error');
-      throw error;
-    }
+    console.log('Found user:', user ? JSON.stringify(user, null, 2) : 'No user found');
+    return user;
   }
 
   async generateUniquePatientCode(): Promise<string> {
@@ -183,45 +158,52 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createHealthRecord(record: InsertHealthRecord): Promise<HealthRecord> {
+    console.log('Creating health record with data:', JSON.stringify(record, null, 2));
+
+    // Get the patient's information using the patient code
+    const [patient] = await db
+      .select()
+      .from(users)
+      .where(eq(users.uuid, record.patientUuid));
+
+    if (!patient) {
+      throw new Error('Patient not found');
+    }
+
+    console.log('Creating record for patient:', {
+      patientId: patient.id,
+      patientUuid: patient.uuid,
+      patientName: patient.fullName,
+      patientCode: patient.patientCode
+    });
+
+    const recordToCreate = {
+      ...record,
+      patientUuid: patient.uuid,
+      sharedWith: [{ 
+        username: patient.username,
+        accessGrantedAt: new Date(),
+        accessLevel: "view"
+      }],
+      verifiedAt: null,
+      verifiedBy: null,
+      signature: null,
+      status: record.status || "pending",
+      isEmergencyAccessible: record.isEmergencyAccessible || false
+    };
+
+    console.log('Final record data:', JSON.stringify(recordToCreate, null, 2));
+
     try {
-      const [patient] = await db
-        .select({
-          id: users.id,
-          uuid: users.uuid,
-          username: users.username,
-          fullName: users.fullName,
-          patientCode: users.patientCode,
-        })
-        .from(users)
-        .where(eq(users.uuid, record.patientUuid));
-
-      if (!patient) {
-        throw new Error('Patient not found');
-      }
-
-      const recordToCreate = {
-        ...record,
-        patientUuid: patient.uuid,
-        sharedWith: [{
-          username: patient.username,
-          accessGrantedAt: new Date(),
-          accessLevel: "view"
-        }],
-        verifiedAt: null,
-        verifiedBy: null,
-        signature: null,
-        status: record.status || "pending",
-        isEmergencyAccessible: record.isEmergencyAccessible || false
-      };
-
       const [newRecord] = await db
         .insert(healthRecords)
-        .values([recordToCreate])
+        .values(recordToCreate)
         .returning();
 
+      console.log('Created health record:', JSON.stringify(newRecord, null, 2));
       return newRecord;
     } catch (error) {
-      console.error('Error in createHealthRecord:', error instanceof Error ? error.message : 'Unknown error');
+      console.error('Error creating health record:', error);
       throw error;
     }
   }
@@ -269,173 +251,45 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getSharedRecords(username: string): Promise<HealthRecord[]> {
-    try {
-      const [user] = await db
-        .select()
-        .from(users)
-        .where(eq(users.username, username));
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.username, username));
 
-      if (!user) {
-        return [];
-      }
-
-      // Use parameterized queries instead of string interpolation
-      const records = await db
-        .select()
-        .from(healthRecords)
-        .where(
-          or(
-            sql`EXISTS (
-              SELECT 1 FROM jsonb_array_elements(${healthRecords.sharedWith}) as share
-              WHERE (share->>'username')::text = ${username}
-              AND (share->>'accessLevel')::text = 'view'
-            )`,
-            and(
-              eq(healthRecords.isEmergencyAccessible, true),
-              sql`EXISTS (
-                SELECT 1 FROM users u
-                WHERE u.uuid = ${healthRecords.patientUuid}
-                AND EXISTS (
-                  SELECT 1 FROM jsonb_array_elements(u.emergency_contacts) as contact
-                  WHERE (contact->>'username')::text = ${username}
-                  AND (contact->>'canViewRecords')::boolean = true
-                )
-              )`
-            )
-          )
-        )
-        .orderBy(sql`${healthRecords.date} DESC`);
-
-      // Remove sensitive data before returning
-      return records.map(record => {
-        const { signature, ...safeRecord } = record;
-        return safeRecord;
-      });
-    } catch (error) {
-      console.error('Error in getSharedRecords:', error instanceof Error ? error.message : 'Unknown error');
-      throw error;
+    if (!user) {
+      return [];
     }
-  }
 
-  // Implement new document methods
-  async getPatientDocuments(patientUuid: string): Promise<Document[]> {
-    console.log('Fetching documents for patient:', patientUuid);
-    try {
-      // Get patient info first
-      const [patient] = await db
-        .select()
-        .from(users)
-        .where(eq(users.uuid, patientUuid));
-
-      if (!patient) {
-        throw new Error('Patient not found');
-      }
-
-      const docs = await db
-        .select()
-        .from(documents)
-        .where(
-          or(
-            eq(documents.patientUuid, patientUuid),
+    // Get records that are shared with this user
+    const records = await db
+      .select()
+      .from(healthRecords)
+      .where(
+        or(
+          // Include records explicitly shared with this user
+          sql`EXISTS (
+            SELECT 1 FROM jsonb_array_elements(${healthRecords.sharedWith}) as share
+            WHERE (share->>'username')::text = ${username}
+            AND (share->>'accessLevel')::text = 'view'
+          )`,
+          // Include emergency-accessible records where user is an emergency contact
+          and(
+            eq(healthRecords.isEmergencyAccessible, true),
             sql`EXISTS (
-              SELECT 1 FROM jsonb_array_elements(${documents.sharedWith}) as share
-              WHERE (share->>'username')::text = ${patient.username}
-              AND (share->>'accessLevel')::text = 'view'
+              SELECT 1 FROM users u
+              WHERE u.uuid = ${healthRecords.patientUuid}
+              AND EXISTS (
+                SELECT 1 FROM jsonb_array_elements(u.emergency_contacts) as contact
+                WHERE (contact->>'username')::text = ${username}
+                AND (contact->>'canViewRecords')::boolean = true
+              )
             )`
           )
         )
-        .orderBy(sql`${documents.uploadedAt} DESC`);
+      )
+      .orderBy(sql`${healthRecords.date} DESC`);
 
-      return docs;
-    } catch (error) {
-      console.error('Error fetching patient documents:', error);
-      throw error;
-    }
-  }
-
-  async createDocument(document: InsertDocument): Promise<Document> {
-    console.log('Creating document:', {
-      ...document,
-      content: document.content ? `<Base64 content length: ${document.content.length}>` : 'No content'
-    });
-
-    try {
-      // Validate the patient exists
-      const [patient] = await db
-        .select()
-        .from(users)
-        .where(eq(users.uuid, document.patientUuid));
-
-      if (!patient) {
-        throw new Error('Patient not found');
-      }
-
-      // Ensure sharedWith array includes the patient
-      const sharedWith = document.sharedWith || [];
-      if (!sharedWith.some(share => share.username === patient.username)) {
-        sharedWith.push({
-          username: patient.username,
-          accessGrantedAt: new Date(),
-          accessLevel: "view"
-        });
-      }
-
-      const documentToCreate: InsertDocument = {
-        ...document,
-        content: document.content || undefined,
-        contentType: document.contentType || undefined,
-        sharedWith
-      };
-
-      const [doc] = await db
-        .insert(documents)
-        .values(documentToCreate)
-        .returning();
-
-      return doc;
-    } catch (error) {
-      console.error('Error creating document:', error);
-      throw error;
-    }
-  }
-
-  // Implement new appointment methods
-  async getPatientAppointments(patientUuid: string): Promise<Appointment[]> {
-    console.log('Fetching appointments for patient:', patientUuid);
-    const appts = await db
-      .select()
-      .from(appointments)
-      .where(eq(appointments.patientUuid, patientUuid))
-      .orderBy(sql`${appointments.datetime} ASC`);
-    return appts;
-  }
-
-  async getGPAppointments(gpUsername: string): Promise<Appointment[]> {
-    console.log('Fetching appointments for GP:', gpUsername);
-    const appts = await db
-      .select()
-      .from(appointments)
-      .where(eq(appointments.gpUsername, gpUsername))
-      .orderBy(sql`${appointments.datetime} ASC`);
-    return appts;
-  }
-
-  async createAppointment(appointment: InsertAppointment): Promise<Appointment> {
-    console.log('Creating appointment:', appointment);
-    const [appt] = await db
-      .insert(appointments)
-      .values(appointment)
-      .returning();
-    return appt;
-  }
-
-  async updateAppointmentStatus(id: number, status: string): Promise<Appointment> {
-    const [appt] = await db
-      .update(appointments)
-      .set({ status })
-      .where(eq(appointments.id, id))
-      .returning();
-    return appt;
+    return records;
   }
 }
 

@@ -6,14 +6,14 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { User, insertHealthRecordSchema, insertDocumentSchema, insertAppointmentSchema, type Document, type Appointment } from "@shared/schema";
+import { User, insertHealthRecordSchema } from "@shared/schema";
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { NavBar } from "@/components/nav-bar";
 import { AnimatedLayout } from "@/components/animated-layout";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Loader2, FileUp, Stethoscope, Calendar } from "lucide-react";
+import { Loader2, FileUp, Stethoscope } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -25,15 +25,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { format } from "date-fns";
-import FullCalendar from '@fullcalendar/react';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import timeGridPlugin from '@fullcalendar/timegrid';
-import interactionPlugin from '@fullcalendar/interaction';
 
 const patientCodeSchema = z.object({
   patientCode: z.string().min(1, "Patient code is required"),
 });
 
+// Update the health record schema to include private notes
 const gpHealthRecordSchema = z.object({
   notes: z.string().min(1, "Medical notes are required"),
   privateNotes: z.string().optional(),
@@ -45,15 +42,11 @@ export default function GPDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [selectedPatient, setSelectedPatient] = useState<User | null>(null);
-  const [selectedDateTime, setSelectedDateTime] = useState<Date | null>(null);
-  const [showAppointmentForm, setShowAppointmentForm] = useState(false);
-  const [selectedTab, setSelectedTab] = useState("records");
-  const [uploadProgress, setUploadProgress] = useState<number>(0);
 
   const lookupForm = useForm<z.infer<typeof patientCodeSchema>>({
     resolver: zodResolver(patientCodeSchema),
     defaultValues: {
-      patientCode: "",
+      patientCode: "",  // Initialize with empty string
     },
   });
 
@@ -67,83 +60,17 @@ export default function GPDashboard() {
     },
   });
 
-  const documentForm = useForm<z.infer<typeof insertDocumentSchema>>({
-    resolver: zodResolver(insertDocumentSchema),
-    defaultValues: {
-      title: "",
-      type: "lab_result" as const,
-      description: "",
-      content: undefined,
-      contentType: "",
-      isPrivate: false,
-    },
-  });
-
-  const handleDocumentSubmit = async (data: z.infer<typeof insertDocumentSchema>) => {
-    if (!selectedPatient) {
-      toast({
-        title: "Error",
-        description: "Please select a patient first",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      const formData = new FormData();
-      formData.append('title', data.title);
-      formData.append('type', data.type);
-      formData.append('description', data.description || '');
-      formData.append('patientUuid', selectedPatient.uuid);
-      formData.append('uploadedBy', user?.username || '');
-      formData.append('file', data.content);
-      
-      await fetch("/api/documents", {
-        method: "POST",
-        body: formData,
-      });
-
-      toast({
-        title: "Success",
-        description: "Document uploaded and shared with patient",
-      });
-
-      documentForm.reset();
-      setShowDocumentForm(false);
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to upload document",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const appointmentForm = useForm<z.infer<typeof insertAppointmentSchema>>({
-    resolver: zodResolver(insertAppointmentSchema),
-    defaultValues: {
-      type: "checkup" as const,
-      datetime: new Date(),
-      duration: 30,
-      notes: "",
-      patientUuid: "",
-      gpUsername: "",
-    },
-  });
-
+  // Query to fetch patient records when a patient is selected
   const { data: patientRecords, isLoading: isLoadingRecords } = useQuery({
-    queryKey: ["/api/health-records", selectedPatient?.uuid],
-    enabled: !!selectedPatient?.uuid,
-  });
-
-  const { data: patientDocuments, isLoading: isLoadingDocuments } = useQuery<Document[]>({
-    queryKey: ["/api/documents", selectedPatient?.uuid],
-    enabled: !!selectedPatient?.uuid,
-  });
-
-  const { data: patientAppointments, isLoading: isLoadingAppointments } = useQuery<Appointment[]>({
-    queryKey: ["/api/appointments", selectedPatient?.uuid],
-    enabled: !!selectedPatient?.uuid,
+    queryKey: ["/api/health-records", selectedPatient?.id],
+    enabled: !!selectedPatient,
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/health-records?userId=${selectedPatient!.id}`);
+      if (!res.ok) {
+        throw new Error("Failed to fetch patient records");
+      }
+      return res.json();
+    },
   });
 
   const lookupMutation = useMutation({
@@ -158,101 +85,60 @@ export default function GPDashboard() {
         description: `Found patient: ${patient.fullName}`,
       });
     },
-  });
-
-  const createDocumentMutation = useMutation({
-    mutationFn: async (data: z.infer<typeof insertDocumentSchema>) => {
-      if (!selectedPatient?.uuid) throw new Error("No patient selected");
-      if (!user?.username) throw new Error("No GP username available");
-
-      const file = data.content as unknown as File;
-      if (!file) throw new Error("No file selected");
-
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("title", data.title);
-      formData.append("type", data.type);
-      formData.append("description", data.description || "");
-      formData.append("patientUuid", selectedPatient.uuid);
-      formData.append("uploadedBy", user.username);
-      formData.append("contentType", file.type);
-      formData.append("isPrivate", String(data.isPrivate));
-
-      const xhr = new XMLHttpRequest();
-      xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable) {
-          const progress = (event.loaded / event.total) * 100;
-          setUploadProgress(progress);
-        }
-      };
-
-      return new Promise((resolve, reject) => {
-        xhr.onload = () => {
-          if (xhr.status === 200 || xhr.status === 201) {
-            resolve(JSON.parse(xhr.responseText));
-          } else {
-            reject(new Error(xhr.responseText || 'Upload failed'));
-          }
-        };
-        xhr.onerror = () => reject(new Error('Network error'));
-        xhr.withCredentials = true; // Include credentials for session
-        xhr.open('POST', '/api/documents', true);
-        xhr.send(formData);
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/documents", selectedPatient?.uuid] });
-      toast({
-        title: "Success",
-        description: "Document uploaded successfully",
-      });
-      documentForm.reset(); // Reset form
-      setUploadProgress(0);
-      setSelectedTab("records"); // Switch back to records tab
-    },
-    onError: (error: Error) => {
-      console.error('Document upload error:', error);
-      toast({
-        title: "Upload Failed",
-        description: error.message || "Failed to upload document",
-        variant: "destructive",
-      });
-      setUploadProgress(0);
-    },
-  });
-
-  const createAppointmentMutation = useMutation({
-    mutationFn: async (data: z.infer<typeof insertAppointmentSchema>) => {
-      if (!selectedPatient?.uuid) throw new Error("No patient selected");
-      if (!user?.username) throw new Error("No GP username available");
-
-      const appointment = {
-        ...data,
-        patientUuid: selectedPatient.uuid,
-        gpUsername: user.username,
-        status: "scheduled" as const
-      };
-
-      const res = await apiRequest("POST", "/api/appointments", appointment);
-      if (!res.ok) {
-        throw new Error('Failed to create appointment');
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/appointments", selectedPatient?.uuid] });
-      toast({
-        title: "Success",
-        description: "Appointment scheduled successfully",
-      });
-      appointmentForm.reset();
-      setShowAppointmentForm(false);
-      setSelectedDateTime(null);
-    },
     onError: (error: Error) => {
       toast({
         title: "Error",
         description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const createRecordMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof gpHealthRecordSchema>) => {
+      if (!selectedPatient) throw new Error("No patient selected");
+
+      const record = {
+        patientUuid: selectedPatient.uuid, // Use the UUID instead of userId
+        title: `${data.diagnosis} - ${format(new Date(), "PP")}`,
+        date: new Date(),
+        recordType: "GP Visit",
+        facility: user?.fullName || "Unknown GP",
+        content: {
+          notes: data.notes,
+          diagnosis: data.diagnosis,
+          treatment: data.treatment,
+          privateNotes: data.privateNotes || ""
+        },
+        isEmergencyAccessible: false,
+        sharedWith: [],
+        status: "pending"
+      };
+
+      const res = await apiRequest("POST", "/api/health-records", record);
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        console.error("Server response error:", errorData);
+        throw new Error(errorData.message || "Failed to create record");
+      }
+
+      const createdRecord = await res.json();
+      return createdRecord;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/health-records", selectedPatient?.id] });
+      toast({
+        title: "Success",
+        description: "Record created and shared with patient for review.",
+      });
+      recordForm.reset();
+    },
+    onError: (error: Error) => {
+      console.error("Record creation error:", error);
+      toast({
+        title: "Error creating record",
+        description: error.message || "Failed to create health record",
         variant: "destructive",
       });
     },
@@ -275,232 +161,12 @@ export default function GPDashboard() {
     );
   }
 
-  const AppointmentsTab = () => {
-    const handleDateSelect = (selectInfo: {
-      start: Date;
-      end: Date;
-      view: { calendar: { unselect: () => void } };
-    }) => {
-      const start = new Date(selectInfo.start);
-      // Only allow future appointments
-      if (start > new Date()) {
-        setSelectedDateTime(start);
-        appointmentForm.setValue("datetime", start);
-        setShowAppointmentForm(true);
-      } else {
-        toast({
-          title: "Invalid Time",
-          description: "Please select a future date and time",
-          variant: "destructive",
-        });
-      }
-      selectInfo.view.calendar.unselect();
-    };
-
-    return (
-      <div className="space-y-4">
-        <div className="rounded-lg border p-4">
-          <FullCalendar
-            plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-            initialView="timeGridWeek"
-            selectable={true}
-            select={handleDateSelect}
-            headerToolbar={{
-              left: 'prev,next today',
-              center: 'title',
-              right: 'timeGridWeek,timeGridDay'
-            }}
-            events={patientAppointments?.map(apt => ({
-              id: apt.id.toString(),
-              title: `${apt.type} - ${selectedPatient?.fullName}`,
-              start: new Date(apt.datetime),
-              end: new Date(new Date(apt.datetime).getTime() + apt.duration * 60000),
-              backgroundColor: apt.status === 'scheduled' ? '#3b82f6' :
-                apt.status === 'completed' ? '#10b981' : '#ef4444',
-              className: `status-${apt.status}`
-            })) ?? []}
-            slotMinTime="08:00:00"
-            slotMaxTime="18:00:00"
-            allDaySlot={false}
-            slotDuration="00:15:00"
-            businessHours={{
-              daysOfWeek: [1, 2, 3, 4, 5],
-              startTime: '08:00',
-              endTime: '18:00',
-            }}
-            selectConstraint="businessHours"
-            validRange={{
-              start: new Date()
-            }}
-            eventContent={(eventInfo) => {
-              return (
-                <div className="p-1">
-                  <div className="text-xs font-semibold">{eventInfo.event.title}</div>
-                  <div className="text-xs">
-                    {format(eventInfo.event.start!, "HH:mm")} -
-                    {format(eventInfo.event.end!, "HH:mm")}
-                  </div>
-                </div>
-              );
-            }}
-          />
-        </div>
-
-        {showAppointmentForm && selectedDateTime && (
-          <Card className="mt-4">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
-                Schedule Appointment for {format(selectedDateTime, "PPp")}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Form {...appointmentForm}>
-                <form onSubmit={appointmentForm.handleSubmit((data) => {
-                  if (!selectedPatient?.uuid || !user?.username) {
-                    toast({
-                      title: "Error",
-                      description: "Missing required information",
-                      variant: "destructive",
-                    });
-                    return;
-                  }
-
-                  const appointmentData = {
-                    ...data,
-                    type: data.type as "checkup" | "follow_up" | "consultation" | "other",
-                    patientUuid: selectedPatient.uuid,
-                    gpUsername: user.username,
-                    datetime: selectedDateTime,
-                  };
-                  createAppointmentMutation.mutate(appointmentData);
-                })} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={appointmentForm.control}
-                      name="type"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Type</FormLabel>
-                          <FormControl>
-                            <select
-                              {...field}
-                              className="w-full p-2 border rounded"
-                            >
-                              <option value="checkup">Check-up</option>
-                              <option value="follow_up">Follow-up</option>
-                              <option value="consultation">Consultation</option>
-                              <option value="other">Other</option>
-                            </select>
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={appointmentForm.control}
-                      name="duration"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Duration</FormLabel>
-                          <FormControl>
-                            <select
-                              {...field}
-                              className="w-full p-2 border rounded"
-                              onChange={(e) => field.onChange(parseInt(e.target.value))}
-                            >
-                              <option value="15">15 minutes</option>
-                              <option value="30">30 minutes</option>
-                              <option value="45">45 minutes</option>
-                              <option value="60">1 hour</option>
-                            </select>
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <FormField
-                    control={appointmentForm.control}
-                    name="notes"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Notes</FormLabel>
-                        <FormControl>
-                          <Textarea {...field} placeholder="Enter appointment notes" />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <div className="flex gap-2">
-                    <Button
-                      type="submit"
-                      disabled={createAppointmentMutation.isPending}
-                      className="flex-1"
-                    >
-                      {createAppointmentMutation.isPending && (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      )}
-                      Schedule Appointment
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        setShowAppointmentForm(false);
-                        setSelectedDateTime(null);
-                        appointmentForm.reset();
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
-              </Form>
-            </CardContent>
-          </Card>
-        )}
-
-        <div className="mt-8">
-          <h3 className="text-lg font-semibold mb-4">Upcoming Appointments</h3>
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date & Time</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Duration</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {patientAppointments?.map((appointment) => (
-                  <TableRow key={appointment.id}>
-                    <TableCell>{format(new Date(appointment.datetime), "PPp")}</TableCell>
-                    <TableCell>{appointment.type}</TableCell>
-                    <TableCell>{appointment.duration} mins</TableCell>
-                    <TableCell>
-                      <span className={`px-2 py-1 rounded-full text-xs ${
-                        appointment.status === "scheduled" ? "bg-blue-100 text-blue-800" :
-                          appointment.status === "completed" ? "bg-green-100 text-green-800" :
-                            "bg-red-100 text-red-800"
-                      }`}>
-                        {appointment.status}
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <AnimatedLayout>
       <NavBar />
       <main className="container mx-auto px-4 py-8">
         <div className="space-y-8">
+          {/* Patient Lookup Card */}
           <Card>
             <CardHeader>
               <CardTitle className="font-mono tracking-wider uppercase flex items-center gap-2">
@@ -546,195 +212,143 @@ export default function GPDashboard() {
             </CardContent>
           </Card>
 
+          {/* Patient Records and Creation Tabs */}
           {selectedPatient && (
             <Card>
               <CardHeader>
                 <CardTitle className="font-mono tracking-wider uppercase flex items-center gap-2">
                   <FileUp className="h-4 w-4 text-primary" />
-                  Patient Management - {selectedPatient.fullName}
+                  Patient Records - {selectedPatient.fullName}
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-4">
+                <Tabs defaultValue="records" className="space-y-4">
                   <TabsList>
-                    <TabsTrigger value="records">Records</TabsTrigger>
-                    <TabsTrigger value="documents">Documents</TabsTrigger>
-                    <TabsTrigger value="appointments">Appointments</TabsTrigger>
+                    <TabsTrigger value="records">View Records</TabsTrigger>
+                    <TabsTrigger value="create">Create New Record</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="records">
-                    <div className="space-y-4">
-                      <div className="rounded-md border">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Date</TableHead>
-                              <TableHead>Type</TableHead>
-                              <TableHead>Title</TableHead>
-                              <TableHead>Status</TableHead>
+                    <div className="rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Title</TableHead>
+                            <TableHead>Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {patientRecords?.map((record) => (
+                            <TableRow key={record.id}>
+                              <TableCell>{format(new Date(record.date), "PP")}</TableCell>
+                              <TableCell>{record.recordType}</TableCell>
+                              <TableCell>{record.title}</TableCell>
+                              <TableCell>
+                                <span className={`px-2 py-1 rounded-full text-xs ${
+                                  record.status === "pending" ? "bg-yellow-100 text-yellow-800" :
+                                    record.status === "accepted" ? "bg-green-100 text-green-800" :
+                                      "bg-red-100 text-red-800"
+                                }`}>
+                                  {record.status}
+                                </span>
+                              </TableCell>
                             </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {patientRecords?.map((record) => (
-                              <TableRow key={record.id}>
-                                <TableCell>{format(new Date(record.date), "PP")}</TableCell>
-                                <TableCell>{record.recordType}</TableCell>
-                                <TableCell>{record.title}</TableCell>
-                                <TableCell>
-                                  <span className={`px-2 py-1 rounded-full text-xs ${
-                                    record.status === "pending" ? "bg-yellow-100 text-yellow-800" :
-                                      record.status === "accepted" ? "bg-green-100 text-green-800" :
-                                        "bg-red-100 text-red-800"
-                                  }`}>
-                                    {record.status}
-                                  </span>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
+                          ))}
+                          {(!patientRecords || patientRecords.length === 0) && (
+                            <TableRow>
+                              <TableCell colSpan={4} className="text-center text-muted-foreground">
+                                No records found
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
                     </div>
                   </TabsContent>
 
-                  <TabsContent value="documents">
-                    <div className="space-y-4">
-                      <Form {...documentForm}>
-                        <form onSubmit={documentForm.handleSubmit((data) => createDocumentMutation.mutate(data))} className="space-y-4">
-                          <div className="grid grid-cols-2 gap-4">
-                            <FormField
-                              control={documentForm.control}
-                              name="title"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Document Title</FormLabel>
-                                  <FormControl>
-                                    <Input {...field} placeholder="Enter document title" />
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={documentForm.control}
-                              name="type"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Document Type</FormLabel>
-                                  <FormControl>
-                                    <select
-                                      {...field}
-                                      className="w-full p-2 border rounded"
-                                    >
-                                      <option value="lab_result">Lab Result</option>
-                                      <option value="prescription">Prescription</option>
-                                      <option value="imaging">Imaging</option>
-                                      <option value="other">Other</option>
-                                    </select>
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                          </div>
-                          <FormField
-                            control={documentForm.control}
-                            name="description"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Description</FormLabel>
-                                <FormControl>
-                                  <Textarea {...field} placeholder="Enter document description" />
-                                </FormControl>
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={documentForm.control}
-                            name="content"
-                            render={({ field: { onChange, value, ...field } }) => (
-                              <FormItem>
-                                <FormLabel>Upload Document</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    type="file"
-                                    onChange={async (e) => {
-                                      const file = e.target.files?.[0];
-                                      if (file) {
-                                        onChange(file);
-                                        documentForm.setValue("contentType", file.type);
-                                        // Read file as base64
-                                        const reader = new FileReader();
-                                        reader.onload = () => {
-                                          const base64 = reader.result?.toString().split(',')[1];
-                                          documentForm.setValue("content", base64);
-                                        };
-                                        reader.readAsDataURL(file);
-                                        console.log('Selected file:', file.name, 'type:', file.type);
-                                      }
-                                    }}
-                                    {...field}
-                                    className="cursor-pointer"
-                                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                                  />
-                                </FormControl>
-                                <FormDescription>
-                                  Supported formats: PDF, Images (JPEG, PNG), Documents (DOC, DOCX)
-                                </FormDescription>
-                              </FormItem>
-                            )}
-                          />
-                          {uploadProgress > 0 && uploadProgress < 100 && (
-                            <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-                              <div
-                                className="bg-primary h-2.5 rounded-full transition-all duration-300"
-                                style={{ width: `${uploadProgress}%` }}
-                              >
-                                <span className="text-xs text-white absolute right-0 -top-6">
-                                  {Math.round(uploadProgress)}%
-                                </span>
-                              </div>
-                            </div>
+                  <TabsContent value="create">
+                    <Form {...recordForm}>
+                      <form onSubmit={recordForm.handleSubmit((data) => createRecordMutation.mutate(data))} className="space-y-4">
+                        <FormField
+                          control={recordForm.control}
+                          name="notes"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Medical Notes (Visible to Patient)</FormLabel>
+                              <FormControl>
+                                <Textarea {...field} placeholder="Enter medical notes that will be visible to the patient" />
+                              </FormControl>
+                            </FormItem>
                           )}
+                        />
+
+                        <FormField
+                          control={recordForm.control}
+                          name="privateNotes"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Private Notes (GP Only)</FormLabel>
+                              <FormDescription>These notes will only be visible to GPs</FormDescription>
+                              <FormControl>
+                                <Textarea {...field} placeholder="Enter private notes (optional)" />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={recordForm.control}
+                          name="diagnosis"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Diagnosis</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Enter diagnosis" />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={recordForm.control}
+                          name="treatment"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Treatment Plan</FormLabel>
+                              <FormControl>
+                                <Textarea {...field} placeholder="Enter treatment plan" />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+
+                        <div className="flex gap-4">
                           <Button
                             type="submit"
-                            disabled={createDocumentMutation.isPending}
-                            className="w-full"
+                            className="flex-1"
+                            disabled={createRecordMutation.isPending}
                           >
-                            {createDocumentMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Upload Document
+                            {createRecordMutation.isPending && (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            )}
+                            Create Record
                           </Button>
-                        </form>
-                      </Form>
-
-                      <div className="mt-8">
-                        <h3 className="text-lg font-semibold mb-4">Uploaded Documents</h3>
-                        <div className="rounded-md border">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Date</TableHead>
-                                <TableHead>Title</TableHead>
-                                <TableHead>Type</TableHead>
-                                <TableHead>Description</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {patientDocuments?.map((doc) => (
-                                <TableRow key={doc.id}>
-                                  <TableCell>{format(new Date(doc.uploadedAt), "PP")}</TableCell>
-                                  <TableCell>{doc.title}</TableCell>
-                                  <TableCell>{doc.type}</TableCell>
-                                  <TableCell>{doc.description}</TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedPatient(null);
+                              lookupForm.reset();
+                              recordForm.reset();
+                            }}
+                          >
+                            Clear Form
+                          </Button>
                         </div>
-                      </div>
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="appointments">
-                    <AppointmentsTab />
+                      </form>
+                    </Form>
                   </TabsContent>
                 </Tabs>
               </CardContent>
