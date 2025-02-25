@@ -90,21 +90,17 @@ export default function GPDashboard() {
     }
 
     try {
+      const formData = new FormData();
+      formData.append('title', data.title);
+      formData.append('type', data.type);
+      formData.append('description', data.description || '');
+      formData.append('patientUuid', selectedPatient.uuid);
+      formData.append('uploadedBy', user?.username || '');
+      formData.append('file', data.content);
+      
       await fetch("/api/documents", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          ...data,
-          patientUuid: selectedPatient.uuid,
-          uploadedBy: user?.username,
-          sharedWith: [{
-            username: selectedPatient.username,
-            accessGrantedAt: new Date(),
-            accessLevel: "view"
-          }]
-        }),
+        body: formData,
       });
 
       toast({
