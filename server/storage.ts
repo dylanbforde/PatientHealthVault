@@ -1,6 +1,6 @@
 import { users, healthRecords, type User, type InsertUser, type HealthRecord, type InsertHealthRecord } from "@shared/schema";
 import { db } from "./db";
-import { eq, or, and, sql } from "drizzle-orm";
+import { eq, or, and, sql, gte, lte, desc } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
@@ -17,7 +17,7 @@ export interface IStorage {
   updateUser(id: number, data: Partial<User>): Promise<User>;
   generateUniquePatientCode(): Promise<string>;
 
-  getHealthRecords(userId: number, search?: string, category?: string, startDate?: Date, endDate?: Date): Promise<HealthRecord[]>;
+  getHealthRecords(userId: number, search?: string, category?: string, startDate?: Date, endDate?: Date, patientUuid?: string): Promise<HealthRecord[]>;
   getHealthRecord(id: number): Promise<HealthRecord | undefined>;
   createHealthRecord(record: InsertHealthRecord): Promise<HealthRecord>;
   updateHealthRecordSharing(id: number, sharedWith: any[]): Promise<HealthRecord>;
@@ -118,7 +118,8 @@ export class DatabaseStorage implements IStorage {
     search?: string,
     category?: string,
     startDate?: Date,
-    endDate?: Date
+    endDate?: Date,
+    patientUuid?: string
   ): Promise<HealthRecord[]> {
     console.log('Fetching health records for user:', userId);
     const [user] = await db
@@ -126,30 +127,38 @@ export class DatabaseStorage implements IStorage {
       .from(users)
       .where(eq(users.id, userId));
 
-    console.log('User details:', {
-      id: user?.id,
-      uuid: user?.uuid,
-      username: user?.username,
-      isGP: user?.isGP,
-      patientCode: user?.patientCode
-    });
-
-    let records;
-    if (user?.isGP) {
-      // For GPs, get records they've created
-      records = await db
-        .select()
-        .from(healthRecords)
-        .where(eq(healthRecords.facility, user.fullName || ''));
-    } else {
-      // For patients, get records where their UUID matches
-      records = await db
-        .select()
-        .from(healthRecords)
-        .where(eq(healthRecords.patientUuid, user.uuid));
+    if (!user) {
+      return [];
     }
 
-    console.log('Found records:', records.length);
+    let query = db.select().from(healthRecords);
+
+    // Apply base filters based on user type
+    if (user?.isGP) {
+      if (patientUuid) {
+        query = query.where(eq(healthRecords.patientUuid, patientUuid));
+      } else {
+        query = query.where(eq(healthRecords.facility, user.fullName || ''));
+      }
+    } else {
+      query = query.where(eq(healthRecords.patientUuid, user.uuid));
+    }
+
+    // Apply additional filters
+    if (search) {
+      query = query.where(sql`(${healthRecords.title} ILIKE ${`%${search}%`} OR ${healthRecords.content}->>'notes' ILIKE ${`%${search}%`})`);
+    }
+    if (category && category !== 'All') {
+      query = query.where(sql`${healthRecords.content}->>'category' = ${category}`);
+    }
+    if (startDate) {
+      query = query.where(gte(healthRecords.date, startDate));
+    }
+    if (endDate) {
+      query = query.where(lte(healthRecords.date, endDate));
+    }
+
+    const records = await query.orderBy(desc(healthRecords.date));
     return records;
   }
 

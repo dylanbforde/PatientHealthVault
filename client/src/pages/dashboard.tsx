@@ -311,6 +311,7 @@ export default function Dashboard() {
   const { toast } = useToast();
   const [selectedRecord, setSelectedRecord] = useState<HealthRecord | null>(null);
   const [searchParams, setSearchParams] = useState({});
+  const [selectedPatient, setSelectedPatient] = useState<any | null>(null); // Added placeholder
   const { data: records, isLoading, refetch } = useQuery<HealthRecord[]>({
     queryKey: ["/api/health-records", searchParams],
     queryFn: async () => {
@@ -415,6 +416,23 @@ export default function Dashboard() {
       gpContact: user?.gpContact || "",
     },
   });
+
+  const handleSearch = async (params: Record<string, string | undefined>) => { //Added handleSearch function
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) queryParams.append(key, value);
+    });
+
+    if (selectedPatient?.uuid) {
+      queryParams.append('patientUuid', selectedPatient.uuid);
+    }
+
+    const response = await apiRequest(
+      "GET",
+      `/api/health-records?${queryParams.toString()}`
+    );
+  };
+
 
   if (isLoading) {
     return (
