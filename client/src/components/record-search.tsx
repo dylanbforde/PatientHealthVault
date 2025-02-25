@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
@@ -22,11 +21,16 @@ const categories = [
   "Emergency",
 ];
 
-export function RecordSearch({ onSearch }: { onSearch: (params: any) => void }) {
+interface RecordSearchProps {
+  onSearch: (params: Record<string, string | undefined>) => void;
+}
+
+export function RecordSearch({ onSearch }: RecordSearchProps) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
 
-  const handleSearch = () => {
+  const handleSearch = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     onSearch({
       search: search || undefined,
       category: category === "All" ? undefined : category,
@@ -34,7 +38,7 @@ export function RecordSearch({ onSearch }: { onSearch: (params: any) => void }) 
   };
 
   return (
-    <div className="flex gap-4 mb-6">
+    <form onSubmit={handleSearch} className="flex gap-4 mb-6">
       <Input
         placeholder="Search records..."
         value={search}
@@ -53,33 +57,6 @@ export function RecordSearch({ onSearch }: { onSearch: (params: any) => void }) 
           ))}
         </SelectContent>
       </Select>
-      <Button onClick={handleSearch}>Search</Button>
-    </div>
-  );
-}
-import { Input } from "@/components/ui/input";
-import { useState } from "react";
-import { Button } from "./ui/button";
-
-interface RecordSearchProps {
-  onSearch: (params: Record<string, string>) => void;
-}
-
-export function RecordSearch({ onSearch }: RecordSearchProps) {
-  const [searchTerm, setSearchTerm] = useState("");
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSearch({ search: searchTerm });
-  };
-
-  return (
-    <form onSubmit={handleSearch} className="flex gap-2 mb-4">
-      <Input 
-        placeholder="Search records..." 
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-      />
       <Button type="submit">Search</Button>
     </form>
   );
