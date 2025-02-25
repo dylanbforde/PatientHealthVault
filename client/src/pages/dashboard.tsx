@@ -56,9 +56,10 @@ import { NavBar } from "@/components/nav-bar";
 import { RecordSharingForm } from "@/components/record-sharing-form";
 import RecordSearch from "@/components/record-search";
 
-
+// Updated ViewRecordDialog to handle content properly
 export function ViewRecordDialog({ record }: { record: HealthRecord }) {
   const [activeTab, setActiveTab] = useState<"details" | "sharing">("details");
+  const content = record.content as Record<string, string>;
 
   return (
     <DialogContent className="max-w-2xl">
@@ -85,13 +86,13 @@ export function ViewRecordDialog({ record }: { record: HealthRecord }) {
               <h3 className="font-medium mb-2">Healthcare Facility</h3>
               <p className="text-sm text-muted-foreground">{record.facility}</p>
             </div>
-            {record.content && typeof record.content === 'object' && (
+            {content && (
               <>
                 <div>
                   <h3 className="font-medium mb-2">Diagnosis</h3>
                   <div className="bg-muted p-4 rounded-lg">
                     <p className="text-sm whitespace-pre-wrap">
-                      {'diagnosis' in record.content ? record.content.diagnosis : ''}
+                      {content.diagnosis || ""}
                     </p>
                   </div>
                 </div>
@@ -99,7 +100,7 @@ export function ViewRecordDialog({ record }: { record: HealthRecord }) {
                   <h3 className="font-medium mb-2">Treatment Plan</h3>
                   <div className="bg-muted p-4 rounded-lg">
                     <p className="text-sm whitespace-pre-wrap">
-                      {'treatment' in record.content ? record.content.treatment : ''}
+                      {content.treatment || ""}
                     </p>
                   </div>
                 </div>
@@ -107,7 +108,7 @@ export function ViewRecordDialog({ record }: { record: HealthRecord }) {
                   <h3 className="font-medium mb-2">Medical Notes</h3>
                   <div className="bg-muted p-4 rounded-lg">
                     <p className="text-sm whitespace-pre-wrap">
-                      {'notes' in record.content ? record.content.notes : ''}
+                      {content.notes || ""}
                     </p>
                   </div>
                 </div>
@@ -142,15 +143,28 @@ export function ViewRecordDialog({ record }: { record: HealthRecord }) {
   );
 }
 
+// Updated NewRecordForm with proper validation and error handling
 function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
   const form = useForm({
-    resolver: zodResolver(insertHealthRecordSchema.omit({ userId: true })),
+    resolver: zodResolver(
+      insertHealthRecordSchema.extend({
+        content: insertHealthRecordSchema.shape.content.default({
+          notes: "",
+          diagnosis: "",
+          treatment: "",
+        }),
+      })
+    ),
     defaultValues: {
       title: "",
       date: new Date(),
       recordType: "",
       facility: "",
-      content: { notes: "" },
+      content: {
+        notes: "",
+        diagnosis: "",
+        treatment: "",
+      },
       isEmergencyAccessible: false,
       sharedWith: [],
     },
@@ -160,20 +174,11 @@ function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
     <Form {...form}>
       <form
         onSubmit={form.handleSubmit((data) => {
-          try {
-            console.log("Form data before submission:", data);
-            const formattedData = {
-              ...data,
-              date: data.date instanceof Date ? data.date : new Date(data.date),
-            };
-            console.log("Formatted data:", formattedData);
-            onSubmit(formattedData);
-          } catch (error) {
-            console.error("Form submission error:", error);
-            if (form.formState.errors) {
-              console.log("Form validation errors:", form.formState.errors);
-            }
-          }
+          const formattedData = {
+            ...data,
+            date: data.date instanceof Date ? data.date : new Date(data.date),
+          };
+          onSubmit(formattedData);
         })}
         className="space-y-4"
       >
@@ -248,16 +253,40 @@ function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
 
         <FormField
           control={form.control}
-          name="content"
+          name="content.diagnosis"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Record Details</FormLabel>
+              <FormLabel>Diagnosis</FormLabel>
               <FormControl>
-                <Textarea
-                  placeholder="Enter record details"
-                  value={field.value.notes || ""}
-                  onChange={(e) => field.onChange({ notes: e.target.value })}
-                />
+                <Input {...field} placeholder="Enter diagnosis" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="content.treatment"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Treatment Plan</FormLabel>
+              <FormControl>
+                <Textarea {...field} placeholder="Enter treatment plan" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="content.notes"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Medical Notes</FormLabel>
+              <FormControl>
+                <Textarea {...field} placeholder="Enter medical notes" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -295,12 +324,6 @@ function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
             "Create Record"
           )}
         </Button>
-
-        {Object.keys(form.formState.errors).length > 0 && (
-          <div className="text-sm text-red-500 mt-2">
-            Please fix the errors above and try again.
-          </div>
-        )}
       </form>
     </Form>
   );
@@ -310,8 +333,8 @@ export default function Dashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [selectedRecord, setSelectedRecord] = useState<HealthRecord | null>(null);
-  const [searchParams, setSearchParams] = useState<Record<string, string>>({});
-  const [selectedPatient, setSelectedPatient] = useState<any | null>(null); 
+  const [searchParams, setSearchParams] = useState<Record<string, string | undefined>>({});
+
   const { data: records = [], isLoading, refetch } = useQuery<HealthRecord[]>({
     queryKey: ["/api/health-records", searchParams],
     queryFn: async () => {
@@ -319,41 +342,35 @@ export default function Dashboard() {
       Object.entries(searchParams).forEach(([key, value]) => {
         if (value) params.append(key, value);
       });
-      const response = await apiRequest("GET", `/api/health-records${params.toString() ? `?${params.toString()}` : ''}`);
-      return Array.isArray(response) ? response : [];
+      const response = await apiRequest(
+        "GET",
+        `/api/health-records${params.toString() ? `?${params.toString()}` : ""}`
+      );
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
     },
   });
 
   const createRecord = useMutation({
     mutationFn: async (data: any) => {
-      try {
-        console.log("Sending record data to server:", data);
-        const res = await apiRequest("POST", "/api/health-records", data);
-        if (!res.ok) {
-          const errorData = await res.json();
-          console.error("Server response error:", errorData);
-          throw new Error(errorData.message || "Failed to create record");
-        }
-        const responseData = await res.json();
-        console.log("Server response success:", responseData);
-        return responseData;
-      } catch (error) {
-        console.error("Record creation error:", error);
-        throw error;
+      const res = await apiRequest("POST", "/api/health-records", data);
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || "Failed to create record");
       }
+      return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/health-records", searchParams] });
+      queryClient.invalidateQueries({ queryKey: ["/api/health-records"] });
       toast({
         title: "Record created",
         description: "Your health record has been created successfully.",
       });
     },
     onError: (error: Error) => {
-      console.error("Mutation error:", error);
       toast({
         title: "Error creating record",
-        description: error.message || "Failed to create health record",
+        description: error.message,
         variant: "destructive",
       });
     },
@@ -419,7 +436,7 @@ export default function Dashboard() {
     },
   });
 
-  const handleSearch = async (params: Record<string, string | undefined>) => { 
+  const handleSearch = async (params: Record<string, string | undefined>) => {
     const queryParams = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
       if (value) queryParams.append(key, value);
@@ -553,7 +570,6 @@ export default function Dashboard() {
                 <EmergencyContactsForm
                   contacts={user?.emergencyContacts || []}
                   onSubmit={(contacts) => {
-                    console.log('Submitting emergency contacts:', contacts);
                     updateProfile.mutate({ emergencyContacts: contacts });
                   }}
                   isSubmitting={updateProfile.isPending}

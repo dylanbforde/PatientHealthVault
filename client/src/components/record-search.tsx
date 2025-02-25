@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
@@ -32,10 +31,13 @@ function RecordSearch({ onSearch }: RecordSearchProps) {
 
   const handleSearch = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    onSearch({
-      search: search || undefined,
-      category: category === "All" ? undefined : category,
-    });
+
+    const searchParams: Record<string, string | undefined> = {
+      search: search.trim() || undefined,
+      recordType: category === "All" ? undefined : category,
+    };
+
+    onSearch(searchParams);
   };
 
   return (
