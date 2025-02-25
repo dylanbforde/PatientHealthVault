@@ -353,15 +353,26 @@ export default function Dashboard() {
     },
   });
 
+  // Update the mutation section
   const createRecord = useMutation({
     mutationFn: async (data: any) => {
       if (!user?.uuid) throw new Error("User not authenticated");
 
+      // Structure the record data according to the schema
       const recordData = {
-        ...data,
         patientUuid: user.uuid,
+        title: data.title,
+        date: new Date(data.date),
+        recordType: data.recordType,
+        content: {
+          notes: data.content.notes,
+          diagnosis: data.content.diagnosis,
+          treatment: data.content.treatment,
+        },
+        facility: data.facility,
         status: "accepted", // Patient's own records are automatically accepted
-        sharedWith: [], // Initialize empty sharing
+        isEmergencyAccessible: data.isEmergencyAccessible,
+        sharedWith: [] // Initialize empty sharing
       };
 
       const res = await apiRequest("POST", "/api/health-records", recordData);
@@ -379,6 +390,7 @@ export default function Dashboard() {
       });
     },
     onError: (error: Error) => {
+      console.error("Record creation error:", error);
       toast({
         title: "Error creating record",
         description: error.message,
@@ -680,71 +692,75 @@ export default function Dashboard() {
                 </TabsList>
 
                 <TabsContent value="table">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Title</TableHead>
-                        <TableHead>Facility</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Emergency Access</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {records?.map((record) => (
-                        <Dialog
-                          key={record.id}
-                          open={selectedRecord?.id === record.id}
-                          onOpenChange={(open) =>
-                            !open && setSelectedRecord(null)
-                          }
-                        >
-                          <DialogTrigger asChild>
-                            <TableRow
-                              className="cursor-pointer hover:bg-muted/50"
-                              onClick={() => setSelectedRecord(record)}
-                            >
-                              <TableCell>
-                                {format(new Date(record.date), "PP")}
-                              </TableCell>
-                              <TableCell>{record.title}</TableCell>
-                              <TableCell>{record.facility}</TableCell>
-                              <TableCell>{record.recordType}</TableCell>
-                              <TableCell>
-                                <div
-                                  className="flex items-center space-x-2"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <Switch
-                                    id={`emergency-${record.id}`}
-                                    checked={record.isEmergencyAccessible ?? false}
-                                    onCheckedChange={(checked) =>
-                                      toggleEmergencyAccess.mutate({
-                                        id: record.id,
-                                        isEmergencyAccessible: checked,
-                                      })
-                                    }
-                                  />
-                                  <Label htmlFor={`emergency-${record.id}`}>
-                                    {record.isEmergencyAccessible
-                                      ? "Enabled"
-                                      : "Disabled"}
-                                  </Label>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          </DialogTrigger>
-                          {selectedRecord && (
-                            <ViewRecordDialog record={selectedRecord} />
-                          )}
-                        </Dialog>
-                      ))}
-                    </TableBody>
-                  </Table>
+                  <div className="max-h-[600px] overflow-y-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Title</TableHead>
+                          <TableHead>Facility</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Emergency Access</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {records?.map((record) => (
+                          <Dialog
+                            key={record.id}
+                            open={selectedRecord?.id === record.id}
+                            onOpenChange={(open) =>
+                              !open && setSelectedRecord(null)
+                            }
+                          >
+                            <DialogTrigger asChild>
+                              <TableRow
+                                className="cursor-pointer hover:bg-muted/50"
+                                onClick={() => setSelectedRecord(record)}
+                              >
+                                <TableCell>
+                                  {format(new Date(record.date), "PP")}
+                                </TableCell>
+                                <TableCell>{record.title}</TableCell>
+                                <TableCell>{record.facility}</TableCell>
+                                <TableCell>{record.recordType}</TableCell>
+                                <TableCell>
+                                  <div
+                                    className="flex items-center space-x-2"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <Switch
+                                      id={`emergency-${record.id}`}
+                                      checked={record.isEmergencyAccessible ?? false}
+                                      onCheckedChange={(checked) =>
+                                        toggleEmergencyAccess.mutate({
+                                          id: record.id,
+                                          isEmergencyAccessible: checked,
+                                        })
+                                      }
+                                    />
+                                    <Label htmlFor={`emergency-${record.id}`}>
+                                      {record.isEmergencyAccessible
+                                        ? "Enabled"
+                                        : "Disabled"}
+                                    </Label>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            </DialogTrigger>
+                            {selectedRecord && (
+                              <ViewRecordDialog record={selectedRecord} />
+                            )}
+                          </Dialog>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </TabsContent>
 
                 <TabsContent value="timeline">
-                  {records && <Timeline records={records} />}
+                  <div className="max-h-[600px] overflow-y-auto">
+                    {records && <Timeline records={records} />}
+                  </div>
                 </TabsContent>
               </Tabs>
             </CardContent>
