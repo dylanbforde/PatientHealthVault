@@ -315,9 +315,12 @@ export default function Dashboard() {
   const { data: records = [], isLoading, refetch } = useQuery<HealthRecord[]>({
     queryKey: ["/api/health-records", searchParams],
     queryFn: async () => {
-      const params = new URLSearchParams(searchParams);
-      const response = await apiRequest("GET", `/api/health-records?${params.toString()}`);
-      return Array.isArray(response) ? response : (response?.records || []);
+      const params = new URLSearchParams();
+      Object.entries(searchParams).forEach(([key, value]) => {
+        if (value) params.append(key, value);
+      });
+      const response = await apiRequest("GET", `/api/health-records${params.toString() ? `?${params.toString()}` : ''}`);
+      return Array.isArray(response) ? response : [];
     },
   });
 
