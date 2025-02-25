@@ -320,34 +320,53 @@ export class DatabaseStorage implements IStorage {
   // Implement new document methods
   async getPatientDocuments(patientUuid: string): Promise<Document[]> {
     console.log('Fetching documents for patient:', patientUuid);
-    const docs = await db
-      .select()
-      .from(documents)
-      .where(eq(documents.patientUuid, patientUuid))
-      .orderBy(sql`${documents.uploadedAt} DESC`);
+    try {
+      const docs = await db
+        .select()
+        .from(documents)
+        .where(
+          or(
+            eq(documents.patientUuid, patientUuid),
+            sql`EXISTS (
+              SELECT 1 FROM jsonb_array_elements(${documents.sharedWith}) as share
+              WHERE (share->>'username')::text = ${patientUuid}
+            )`
+          )
+        )
+        .orderBy(sql`${documents.uploadedAt} DESC`);
 
-    // Remove content from response to reduce payload size
-    return docs.map(doc => ({
-      ...doc,
-      content: `<Base64 content: ${doc.content.length} bytes>`
-    }));
+      // Remove content from response to reduce payload size
+      return docs.map(doc => ({
+        ...doc,
+        content: doc.content ? `<Base64 content: ${doc.content.length} bytes>` : null
+      }));
+    } catch (error) {
+      console.error('Error fetching patient documents:', error);
+      throw error;
+    }
   }
 
   async createDocument(document: InsertDocument): Promise<Document> {
     console.log('Creating document:', {
       ...document,
-      content: `<Base64 content length: ${document.content.length}>`
+      content: document.content ? `<Base64 content length: ${document.content.length}>` : 'No content'
     });
 
     try {
+      // Add sharedWith array if not provided
+      const documentToCreate = {
+        ...document,
+        sharedWith: document.sharedWith || [],
+      };
+
       const [doc] = await db
         .insert(documents)
-        .values(document)
+        .values(documentToCreate)
         .returning();
 
       return {
         ...doc,
-        content: `<Base64 content: ${doc.content.length} bytes>`
+        content: doc.content ? `<Base64 content: ${doc.content.length} bytes>` : null
       };
     } catch (error) {
       console.error('Error creating document:', error);

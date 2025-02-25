@@ -82,6 +82,23 @@ export const healthRecords = pgTable("health_records", {
 });
 
 
+// Update the documents table schema to make content optional
+export const documents = pgTable("documents", {
+  id: serial("id").primaryKey(),
+  uuid: uuid("uuid").notNull().unique().defaultRandom(),
+  patientUuid: uuid("patient_uuid").notNull(),
+  uploadedBy: text("uploaded_by").notNull(), // GP's username
+  title: text("title").notNull(),
+  type: text("type").notNull(), // e.g., "lab_result", "prescription", "imaging"
+  contentType: text("content_type"), // MIME type
+  content: text("content"), // Base64 encoded content - now optional
+  uploadedAt: timestamp("uploaded_at").notNull().defaultNow(),
+  description: text("description"),
+  tags: text("tags").array(),
+  isPrivate: boolean("is_private").default(false),
+  sharedWith: jsonb("shared_with").$type<z.infer<typeof sharedAccessSchema>[]>().default([]),
+});
+
 // Update the insert schema for users
 export const insertUserSchema = createInsertSchema(users).extend({
   emergencyContacts: emergencyContactSchema.array().default([]),
@@ -93,20 +110,13 @@ export const insertUserSchema = createInsertSchema(users).extend({
 
 export const insertHealthRecordSchema = healthRecordSchema;
 
-// New schema for medical documents
-export const documents = pgTable("documents", {
-  id: serial("id").primaryKey(),
-  uuid: uuid("uuid").notNull().unique().defaultRandom(),
-  patientUuid: uuid("patient_uuid").notNull(),
-  uploadedBy: text("uploaded_by").notNull(), // GP's username
-  title: text("title").notNull(),
-  type: text("type").notNull(), // e.g., "lab_result", "prescription", "imaging"
-  contentType: text("content_type").notNull(), // MIME type
-  content: text("content").notNull(), // Base64 encoded content
-  uploadedAt: timestamp("uploaded_at").notNull().defaultNow(),
-  description: text("description"),
-  tags: text("tags").array(),
-  isPrivate: boolean("is_private").default(false),
+// Update the document insert schema
+export const insertDocumentSchema = createInsertSchema(documents).extend({
+  content: z.string().optional(),
+  type: z.enum(["lab_result", "prescription", "imaging", "other"]),
+  contentType: z.string().optional(),
+  isPrivate: z.boolean().default(false),
+  sharedWith: sharedAccessSchema.array().default([]),
 });
 
 // New schema for appointments
@@ -121,14 +131,6 @@ export const appointments = pgTable("appointments", {
   type: text("type").notNull(), // e.g., "checkup", "follow_up", "consultation"
   notes: text("notes"),
   reminderSent: boolean("reminder_sent").default(false),
-});
-
-// Document insert schema
-export const insertDocumentSchema = createInsertSchema(documents).extend({
-  content: z.string().transform((val) => val),
-  type: z.enum(["lab_result", "prescription", "imaging", "other"]),
-  contentType: z.string().min(1, "Content type is required"),
-  isPrivate: z.boolean().default(false),
 });
 
 // Appointment insert schema

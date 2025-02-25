@@ -357,13 +357,12 @@ export function registerRoutes(app: Express): Server {
   // Update the document upload endpoint
   app.post("/api/documents", upload.single('file'), async (req: FileRequest, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
     try {
       console.log('Processing document upload:', {
-        fileName: req.file.originalname,
-        mimeType: req.file.mimetype,
-        size: req.file.size,
+        fileName: req.file?.originalname,
+        mimeType: req.file?.mimetype,
+        size: req.file?.size,
         formData: req.body
       });
 
@@ -371,17 +370,22 @@ export function registerRoutes(app: Express): Server {
         title: req.body.title,
         type: req.body.type,
         description: req.body.description || "",
-        content: req.file.buffer.toString('base64'), // Convert Buffer to base64 string
-        contentType: req.file.mimetype,
+        content: req.file ? req.file.buffer.toString('base64') : null,
+        contentType: req.file?.mimetype,
         patientUuid: req.body.patientUuid,
         uploadedBy: req.body.uploadedBy,
         uploadedAt: new Date(),
-        isPrivate: req.body.isPrivate === 'true'
+        isPrivate: req.body.isPrivate === 'true',
+        sharedWith: [{
+          username: req.body.patientUsername,
+          accessGrantedAt: new Date(),
+          accessLevel: "view"
+        }]
       };
 
       console.log('Creating document:', {
         ...document,
-        content: `<Base64 string length: ${document.content.length}>`
+        content: document.content ? `<Base64 string length: ${document.content.length}>` : 'No content'
       });
 
       const savedDoc = await storage.createDocument(document);
