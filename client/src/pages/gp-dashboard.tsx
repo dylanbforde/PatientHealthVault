@@ -79,6 +79,50 @@ export default function GPDashboard() {
     },
   });
 
+  const handleDocumentSubmit = async (data: z.infer<typeof insertDocumentSchema>) => {
+    if (!selectedPatient) {
+      toast({
+        title: "Error",
+        description: "Please select a patient first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await fetch("/api/documents", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...data,
+          patientUuid: selectedPatient.uuid,
+          uploadedBy: user?.username,
+          sharedWith: [{
+            username: selectedPatient.username,
+            accessGrantedAt: new Date(),
+            accessLevel: "view"
+          }]
+        }),
+      });
+
+      toast({
+        title: "Success",
+        description: "Document uploaded and shared with patient",
+      });
+
+      documentForm.reset();
+      setShowDocumentForm(false);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to upload document",
+        variant: "destructive",
+      });
+    }
+  };
+
   const appointmentForm = useForm<z.infer<typeof insertAppointmentSchema>>({
     resolver: zodResolver(insertAppointmentSchema),
     defaultValues: {
@@ -616,11 +660,18 @@ export default function GPDashboard() {
                                 <FormControl>
                                   <Input
                                     type="file"
-                                    onChange={(e) => {
+                                    onChange={async (e) => {
                                       const file = e.target.files?.[0];
                                       if (file) {
                                         onChange(file);
                                         documentForm.setValue("contentType", file.type);
+                                        // Read file as base64
+                                        const reader = new FileReader();
+                                        reader.onload = () => {
+                                          const base64 = reader.result?.toString().split(',')[1];
+                                          documentForm.setValue("content", base64);
+                                        };
+                                        reader.readAsDataURL(file);
                                         console.log('Selected file:', file.name, 'type:', file.type);
                                       }
                                     }}

@@ -360,12 +360,31 @@ export class DatabaseStorage implements IStorage {
     });
 
     try {
-      // Ensure sharedWith array has correct type
+      // Validate the patient exists
+      const [patient] = await db
+        .select()
+        .from(users)
+        .where(eq(users.uuid, document.patientUuid));
+
+      if (!patient) {
+        throw new Error('Patient not found');
+      }
+
+      // Ensure sharedWith array includes the patient
+      const sharedWith = document.sharedWith || [];
+      if (!sharedWith.some(share => share.username === patient.username)) {
+        sharedWith.push({
+          username: patient.username,
+          accessGrantedAt: new Date(),
+          accessLevel: "view"
+        });
+      }
+
       const documentToCreate: InsertDocument = {
         ...document,
         content: document.content || undefined,
         contentType: document.contentType || undefined,
-        sharedWith: document.sharedWith || []
+        sharedWith
       };
 
       const [doc] = await db
