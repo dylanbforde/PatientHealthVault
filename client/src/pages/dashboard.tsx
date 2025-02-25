@@ -317,7 +317,7 @@ export default function Dashboard() {
     queryFn: async () => {
       const params = new URLSearchParams(searchParams);
       const response = await apiRequest("GET", `/api/health-records?${params.toString()}`);
-      return response || [];
+      return Array.isArray(response) ? response : (response?.records || []);
     },
   });
 
