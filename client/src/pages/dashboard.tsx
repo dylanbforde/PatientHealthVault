@@ -54,6 +54,7 @@ import { EmergencyContactsForm } from "@/components/emergency-contacts-form";
 import { SharedRecordsView } from "@/components/shared-records-view";
 import { NavBar } from "@/components/nav-bar";
 import { RecordSharingForm } from "@/components/record-sharing-form";
+import { RecordSearch } from "@/components/record-search"; // Added import
 
 
 export function ViewRecordDialog({ record }: { record: HealthRecord }) {
@@ -615,7 +616,6 @@ export default function Dashboard() {
               </Dialog>
             </CardHeader>
             <CardContent>
-              {/* Placeholder for RecordSearch component */}
               <RecordSearch onSearch={(params) => {
                 setSearchParams(params);
                 refetch();
