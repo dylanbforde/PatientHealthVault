@@ -310,16 +310,14 @@ export default function Dashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [selectedRecord, setSelectedRecord] = useState<HealthRecord | null>(null);
-  const [searchParams, setSearchParams] = useState({});
-  const [selectedPatient, setSelectedPatient] = useState<any | null>(null); // Added placeholder
+  const [searchParams, setSearchParams] = useState<Record<string, string>>({});
+  const [selectedPatient, setSelectedPatient] = useState<any | null>(null); 
   const { data: records, isLoading, refetch } = useQuery<HealthRecord[]>({
     queryKey: ["/api/health-records", searchParams],
     queryFn: async () => {
       const params = new URLSearchParams(searchParams);
-      const response = await fetch(`/api/health-records?${params}`);
-      if (!response.ok) throw new Error('Network response was not ok');
-      return response.json();
-    }
+      return apiRequest("GET", `/api/health-records?${params.toString()}`);
+    },
   });
 
   const createRecord = useMutation({
@@ -417,7 +415,7 @@ export default function Dashboard() {
     },
   });
 
-  const handleSearch = async (params: Record<string, string | undefined>) => { //Added handleSearch function
+  const handleSearch = async (params: Record<string, string | undefined>) => { 
     const queryParams = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
       if (value) queryParams.append(key, value);
