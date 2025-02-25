@@ -11,6 +11,13 @@ app.use(cors({
   credentials: true // Allow credentials (cookies, auth headers)
 }));
 
+// Add headers to allow iframe embedding in Replit
+app.use((req, res, next) => {
+  res.header('X-Frame-Options', 'ALLOW-FROM replit.com');
+  res.header('Content-Security-Policy', "frame-ancestors 'self' *.replit.com *.replit.dev");
+  next();
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
