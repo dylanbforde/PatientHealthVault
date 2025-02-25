@@ -175,11 +175,13 @@ function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
     <Form {...form}>
       <form
         onSubmit={form.handleSubmit((data) => {
+          console.log("Form submission data:", data);
           const formattedData = {
             ...data,
             patientUuid: user?.uuid,  // Add the patient's UUID
             date: data.date instanceof Date ? data.date : new Date(data.date),
           };
+          console.log("Formatted form data:", formattedData);
           onSubmit(formattedData);
         })}
         className="space-y-4"
@@ -337,25 +339,10 @@ export default function Dashboard() {
   const [selectedRecord, setSelectedRecord] = useState<HealthRecord | null>(null);
   const [searchParams, setSearchParams] = useState<Record<string, string | undefined>>({});
 
-  const { data: records = [], isLoading, refetch } = useQuery<HealthRecord[]>({
-    queryKey: ["/api/health-records", searchParams],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      Object.entries(searchParams).forEach(([key, value]) => {
-        if (value) params.append(key, value);
-      });
-      const response = await apiRequest(
-        "GET",
-        `/api/health-records${params.toString() ? `?${params.toString()}` : ""}`
-      );
-      const data = await response.json();
-      return Array.isArray(data) ? data : [];
-    },
-  });
-
-  // Update the mutation section
+  // Update the mutation section with detailed logging
   const createRecord = useMutation({
     mutationFn: async (data: any) => {
+      console.log("Mutation received data:", data);
       if (!user?.uuid) throw new Error("User not authenticated");
 
       // Structure the record data according to the schema
@@ -375,14 +362,21 @@ export default function Dashboard() {
         sharedWith: [] // Initialize empty sharing
       };
 
+      console.log("Sending record data to server:", recordData);
       const res = await apiRequest("POST", "/api/health-records", recordData);
+
       if (!res.ok) {
         const errorData = await res.json();
+        console.error("Server error response:", errorData);
         throw new Error(errorData.message || "Failed to create record");
       }
-      return res.json();
+
+      const responseData = await res.json();
+      console.log("Server success response:", responseData);
+      return responseData;
     },
     onSuccess: () => {
+      console.log("Record creation succeeded, invalidating queries");
       queryClient.invalidateQueries({ queryKey: ["/api/health-records"] });
       toast({
         title: "Record created",
@@ -475,6 +469,22 @@ export default function Dashboard() {
     );
   };
 
+
+  const { data: records = [], isLoading, refetch } = useQuery<HealthRecord[]>({
+    queryKey: ["/api/health-records", searchParams],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      Object.entries(searchParams).forEach(([key, value]) => {
+        if (value) params.append(key, value);
+      });
+      const response = await apiRequest(
+        "GET",
+        `/api/health-records${params.toString() ? `?${params.toString()}` : ""}`
+      );
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
+    },
+  });
 
   if (isLoading) {
     return (
