@@ -6,6 +6,8 @@ import { storage } from "./storage";
 import { insertHealthRecordSchema, insertDocumentSchema, insertAppointmentSchema } from "@shared/schema";
 import { ZodError } from "zod";
 import { eq, and, or, sql } from "drizzle-orm";
+import { db } from "./db";
+import { users } from "@shared/schema";
 
 // Configure multer for file uploads
 const upload = multer({ storage: multer.memoryStorage() });
@@ -366,6 +368,24 @@ export function registerRoutes(app: Express): Server {
         formData: req.body
       });
 
+      // Validate required fields
+      if (!req.body.patientUuid || !req.body.title || !req.body.type) {
+        return res.status(400).json({
+          message: "Missing required fields",
+          required: ['patientUuid', 'title', 'type']
+        });
+      }
+
+      // Get patient info to properly set up sharing
+      const [patient] = await db
+        .select()
+        .from(users)
+        .where(eq(users.uuid, req.body.patientUuid));
+
+      if (!patient) {
+        return res.status(404).json({ message: "Patient not found" });
+      }
+
       const document = {
         title: req.body.title,
         type: req.body.type,
@@ -373,13 +393,13 @@ export function registerRoutes(app: Express): Server {
         content: req.file ? req.file.buffer.toString('base64') : null,
         contentType: req.file?.mimetype,
         patientUuid: req.body.patientUuid,
-        uploadedBy: req.body.uploadedBy,
+        uploadedBy: req.user.username, // Use the authenticated user's username
         uploadedAt: new Date(),
         isPrivate: req.body.isPrivate === 'true',
         sharedWith: [{
-          username: req.body.patientUsername,
+          username: patient.username,
           accessGrantedAt: new Date(),
-          accessLevel: "view"
+          accessLevel: "view" as const // Explicitly type as const to match schema
         }]
       };
 
@@ -389,7 +409,10 @@ export function registerRoutes(app: Express): Server {
       });
 
       const savedDoc = await storage.createDocument(document);
-      res.status(201).json(savedDoc);
+
+      // Send success response with document info but without content
+      const { content, ...docWithoutContent } = savedDoc;
+      res.status(201).json(docWithoutContent);
     } catch (err) {
       console.error('Error uploading document:', err);
       if (err instanceof ZodError) {
