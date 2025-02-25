@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
+import logger from "@/lib/logger";
 import {
   Select,
   SelectContent,
@@ -31,12 +32,14 @@ function RecordSearch({ onSearch }: RecordSearchProps) {
 
   const handleSearch = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    logger.info(`Performing search with terms: ${search}, category: ${category}`);
 
     const searchParams: Record<string, string | undefined> = {
       search: search.trim() || undefined,
       recordType: category === "All" ? undefined : category,
     };
 
+    logger.debug(`Search params: ${JSON.stringify(searchParams)}`);
     onSearch(searchParams);
   };
 
@@ -45,10 +48,19 @@ function RecordSearch({ onSearch }: RecordSearchProps) {
       <Input
         placeholder="Search records..."
         value={search}
-        onChange={(e) => setSearch(e.target.value)}
+        onChange={(e) => {
+          logger.debug(`Search input changed: ${e.target.value}`);
+          setSearch(e.target.value);
+        }}
         className="max-w-xs"
       />
-      <Select value={category} onValueChange={setCategory}>
+      <Select 
+        value={category} 
+        onValueChange={(value) => {
+          logger.debug(`Category changed to: ${value}`);
+          setCategory(value);
+        }}
+      >
         <SelectTrigger className="w-[180px]">
           <SelectValue placeholder="Category" />
         </SelectTrigger>

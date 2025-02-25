@@ -55,6 +55,7 @@ import { SharedRecordsView } from "@/components/shared-records-view";
 import { NavBar } from "@/components/nav-bar";
 import { RecordSharingForm } from "@/components/record-sharing-form";
 import RecordSearch from "@/components/record-search";
+import logger from "@/lib/logger";
 
 // Updated ViewRecordDialog to handle content properly
 export function ViewRecordDialog({ record }: { record: HealthRecord }) {
@@ -175,14 +176,23 @@ function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
     <Form {...form}>
       <form
         onSubmit={form.handleSubmit((data) => {
-          console.log("Form submission data:", data);
-          const formattedData = {
-            ...data,
-            patientUuid: user?.uuid,  // Add the patient's UUID
-            date: data.date instanceof Date ? data.date : new Date(data.date),
-          };
-          console.log("Formatted form data:", formattedData);
-          onSubmit(formattedData);
+          logger.info("Form submission started", {
+            userId: user?.id,
+            userUuid: user?.uuid,
+          });
+
+          try {
+            const formattedData = {
+              ...data,
+              patientUuid: user?.uuid,
+              date: data.date instanceof Date ? data.date : new Date(data.date),
+            };
+            logger.debug("Formatted form data", { formattedData });
+            onSubmit(formattedData);
+          } catch (error) {
+            logger.error("Error formatting form data", { error });
+            throw error;
+          }
         })}
         className="space-y-4"
       >
@@ -339,44 +349,57 @@ export default function Dashboard() {
   const [selectedRecord, setSelectedRecord] = useState<HealthRecord | null>(null);
   const [searchParams, setSearchParams] = useState<Record<string, string | undefined>>({});
 
-  // Update the mutation section with detailed logging
+  const handleSearch = async (params: Record<string, string | undefined>) => {
+    logger.info("Search params received", { params });
+    setSearchParams(params);
+    refetch();
+  };
+
   const createRecord = useMutation({
     mutationFn: async (data: any) => {
-      console.log("Mutation received data:", data);
-      if (!user?.uuid) throw new Error("User not authenticated");
+      logger.info("Creating record mutation started", { data });
 
-      // Structure the record data according to the schema
-      const recordData = {
-        patientUuid: user.uuid,
-        title: data.title,
-        date: new Date(data.date),
-        recordType: data.recordType,
-        content: {
-          notes: data.content.notes,
-          diagnosis: data.content.diagnosis,
-          treatment: data.content.treatment,
-        },
-        facility: data.facility,
-        status: "accepted", // Patient's own records are automatically accepted
-        isEmergencyAccessible: data.isEmergencyAccessible,
-        sharedWith: [] // Initialize empty sharing
-      };
-
-      console.log("Sending record data to server:", recordData);
-      const res = await apiRequest("POST", "/api/health-records", recordData);
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        console.error("Server error response:", errorData);
-        throw new Error(errorData.message || "Failed to create record");
+      if (!user?.uuid) {
+        logger.error("User not authenticated");
+        throw new Error("User not authenticated");
       }
 
-      const responseData = await res.json();
-      console.log("Server success response:", responseData);
-      return responseData;
+      try {
+        const recordData = {
+          patientUuid: user.uuid,
+          title: data.title,
+          date: new Date(data.date),
+          recordType: data.recordType,
+          content: {
+            notes: data.content.notes,
+            diagnosis: data.content.diagnosis,
+            treatment: data.content.treatment,
+          },
+          facility: data.facility,
+          status: "accepted", // Patient's own records are automatically accepted
+          isEmergencyAccessible: data.isEmergencyAccessible,
+          sharedWith: []
+        };
+
+        logger.debug("Sending record data to server", { recordData });
+        const res = await apiRequest("POST", "/api/health-records", recordData);
+
+        if (!res.ok) {
+          const errorData = await res.json();
+          logger.error("Server error response", { errorData });
+          throw new Error(errorData.message || "Failed to create record");
+        }
+
+        const responseData = await res.json();
+        logger.info("Record created successfully", { responseData });
+        return responseData;
+      } catch (error) {
+        logger.error("Error in record creation", { error });
+        throw error;
+      }
     },
     onSuccess: () => {
-      console.log("Record creation succeeded, invalidating queries");
+      logger.info("Record creation mutation succeeded");
       queryClient.invalidateQueries({ queryKey: ["/api/health-records"] });
       toast({
         title: "Record created",
@@ -384,7 +407,7 @@ export default function Dashboard() {
       });
     },
     onError: (error: Error) => {
-      console.error("Record creation error:", error);
+      logger.error("Record creation mutation failed", { error });
       toast({
         title: "Error creating record",
         description: error.message,
@@ -453,22 +476,6 @@ export default function Dashboard() {
     },
   });
 
-  const handleSearch = async (params: Record<string, string | undefined>) => {
-    const queryParams = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value) queryParams.append(key, value);
-    });
-
-    if (selectedPatient?.uuid) {
-      queryParams.append('patientUuid', selectedPatient.uuid);
-    }
-
-    const response = await apiRequest(
-      "GET",
-      `/api/health-records?${queryParams.toString()}`
-    );
-  };
-
 
   const { data: records = [], isLoading, refetch } = useQuery<HealthRecord[]>({
     queryKey: ["/api/health-records", searchParams],
@@ -482,6 +489,7 @@ export default function Dashboard() {
         `/api/health-records${params.toString() ? `?${params.toString()}` : ""}`
       );
       const data = await response.json();
+      logger.debug("Fetched health records", { data });
       return Array.isArray(data) ? data : [];
     },
   });
