@@ -54,7 +54,7 @@ import { EmergencyContactsForm } from "@/components/emergency-contacts-form";
 import { SharedRecordsView } from "@/components/shared-records-view";
 import { NavBar } from "@/components/nav-bar";
 import { RecordSharingForm } from "@/components/record-sharing-form";
-import { RecordSearch } from "@/components/record-search"; // Added import
+import { RecordSearch } from "@/components/record-search";
 
 
 export function ViewRecordDialog({ record }: { record: HealthRecord }) {
@@ -310,7 +310,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [selectedRecord, setSelectedRecord] = useState<HealthRecord | null>(null);
-  const [searchParams, setSearchParams] = useState({}); // Added searchParams state
+  const [searchParams, setSearchParams] = useState({});
   const { data: records, isLoading, refetch } = useQuery<HealthRecord[]>({
     queryKey: ["/api/health-records", searchParams],
     queryFn: async () => {
@@ -340,7 +340,7 @@ export default function Dashboard() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/health-records", searchParams] }); // Added searchParams to queryKey
+      queryClient.invalidateQueries({ queryKey: ["/api/health-records", searchParams] });
       toast({
         title: "Record created",
         description: "Your health record has been created successfully.",
@@ -372,7 +372,7 @@ export default function Dashboard() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/health-records", searchParams] }); // Added searchParams to queryKey
+      queryClient.invalidateQueries({ queryKey: ["/api/health-records", searchParams] });
     },
   });
 

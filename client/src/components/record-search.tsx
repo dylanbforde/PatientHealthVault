@@ -57,3 +57,30 @@ export function RecordSearch({ onSearch }: { onSearch: (params: any) => void }) 
     </div>
   );
 }
+import { Input } from "@/components/ui/input";
+import { useState } from "react";
+import { Button } from "./ui/button";
+
+interface RecordSearchProps {
+  onSearch: (params: Record<string, string>) => void;
+}
+
+export function RecordSearch({ onSearch }: RecordSearchProps) {
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSearch({ search: searchTerm });
+  };
+
+  return (
+    <form onSubmit={handleSearch} className="flex gap-2 mb-4">
+      <Input 
+        placeholder="Search records..." 
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+      />
+      <Button type="submit">Search</Button>
+    </form>
+  );
+}
