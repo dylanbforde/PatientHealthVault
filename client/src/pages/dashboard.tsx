@@ -311,8 +311,14 @@ export default function Dashboard() {
   const { toast } = useToast();
   const [selectedRecord, setSelectedRecord] = useState<HealthRecord | null>(null);
   const [searchParams, setSearchParams] = useState({}); // Added searchParams state
-  const { data: records, isLoading, refetch } = useQuery<HealthRecord[]>({ // Added refetch
-    queryKey: ["/api/health-records", searchParams], // Added searchParams to queryKey
+  const { data: records, isLoading, refetch } = useQuery<HealthRecord[]>({
+    queryKey: ["/api/health-records", searchParams],
+    queryFn: async () => {
+      const params = new URLSearchParams(searchParams);
+      const response = await fetch(`/api/health-records?${params}`);
+      if (!response.ok) throw new Error('Network response was not ok');
+      return response.json();
+    }
   });
 
   const createRecord = useMutation({
