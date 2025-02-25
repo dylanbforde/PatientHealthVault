@@ -50,14 +50,29 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByPatientCode(patientCode: string): Promise<User | undefined> {
-    console.log('Looking up user by patient code:', patientCode);
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(eq(users.patientCode, patientCode));
+    try {
+      const [user] = await db
+        .select({
+          id: users.id,
+          username: users.username,
+          fullName: users.fullName,
+          isGP: users.isGP,
+          patientCode: users.patientCode,
+          bloodType: users.bloodType,
+          allergies: users.allergies,
+          emergencyContacts: users.emergencyContacts,
+          gpUsername: users.gpUsername,
+          gpName: users.gpName,
+          gpContact: users.gpContact,
+        })
+        .from(users)
+        .where(eq(users.patientCode, patientCode));
 
-    console.log('Found user:', user ? JSON.stringify(user, null, 2) : 'No user found');
-    return user;
+      return user;
+    } catch (error) {
+      console.error('Error in getUserByPatientCode:', error instanceof Error ? error.message : 'Unknown error');
+      throw error;
+    }
   }
 
   async generateUniquePatientCode(): Promise<string> {
@@ -168,52 +183,45 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createHealthRecord(record: InsertHealthRecord): Promise<HealthRecord> {
-    console.log('Creating health record with data:', JSON.stringify(record, null, 2));
-
-    // Get the patient's information using the patient code
-    const [patient] = await db
-      .select()
-      .from(users)
-      .where(eq(users.uuid, record.patientUuid));
-
-    if (!patient) {
-      throw new Error('Patient not found');
-    }
-
-    console.log('Creating record for patient:', {
-      patientId: patient.id,
-      patientUuid: patient.uuid,
-      patientName: patient.fullName,
-      patientCode: patient.patientCode
-    });
-
-    const recordToCreate = {
-      ...record,
-      patientUuid: patient.uuid,
-      sharedWith: [{
-        username: patient.username,
-        accessGrantedAt: new Date(),
-        accessLevel: "view"
-      }],
-      verifiedAt: null,
-      verifiedBy: null,
-      signature: null,
-      status: record.status || "pending",
-      isEmergencyAccessible: record.isEmergencyAccessible || false
-    };
-
-    console.log('Final record data:', JSON.stringify(recordToCreate, null, 2));
-
     try {
+      const [patient] = await db
+        .select({
+          id: users.id,
+          uuid: users.uuid,
+          username: users.username,
+          fullName: users.fullName,
+          patientCode: users.patientCode,
+        })
+        .from(users)
+        .where(eq(users.uuid, record.patientUuid));
+
+      if (!patient) {
+        throw new Error('Patient not found');
+      }
+
+      const recordToCreate = {
+        ...record,
+        patientUuid: patient.uuid,
+        sharedWith: [{
+          username: patient.username,
+          accessGrantedAt: new Date(),
+          accessLevel: "view"
+        }],
+        verifiedAt: null,
+        verifiedBy: null,
+        signature: null,
+        status: record.status || "pending",
+        isEmergencyAccessible: record.isEmergencyAccessible || false
+      };
+
       const [newRecord] = await db
         .insert(healthRecords)
-        .values(recordToCreate)
+        .values([recordToCreate])
         .returning();
 
-      console.log('Created health record:', JSON.stringify(newRecord, null, 2));
       return newRecord;
     } catch (error) {
-      console.error('Error creating health record:', error);
+      console.error('Error in createHealthRecord:', error instanceof Error ? error.message : 'Unknown error');
       throw error;
     }
   }
@@ -261,45 +269,52 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getSharedRecords(username: string): Promise<HealthRecord[]> {
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(eq(users.username, username));
+    try {
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.username, username));
 
-    if (!user) {
-      return [];
-    }
+      if (!user) {
+        return [];
+      }
 
-    // Get records that are shared with this user
-    const records = await db
-      .select()
-      .from(healthRecords)
-      .where(
-        or(
-          // Include records explicitly shared with this user
-          sql`EXISTS (
-            SELECT 1 FROM jsonb_array_elements(${healthRecords.sharedWith}) as share
-            WHERE (share->>'username')::text = ${username}
-            AND (share->>'accessLevel')::text = 'view'
-          )`,
-          // Include emergency-accessible records where user is an emergency contact
-          and(
-            eq(healthRecords.isEmergencyAccessible, true),
+      // Use parameterized queries instead of string interpolation
+      const records = await db
+        .select()
+        .from(healthRecords)
+        .where(
+          or(
             sql`EXISTS (
-              SELECT 1 FROM users u
-              WHERE u.uuid = ${healthRecords.patientUuid}
-              AND EXISTS (
-                SELECT 1 FROM jsonb_array_elements(u.emergency_contacts) as contact
-                WHERE (contact->>'username')::text = ${username}
-                AND (contact->>'canViewRecords')::boolean = true
-              )
-            )`
+              SELECT 1 FROM jsonb_array_elements(${healthRecords.sharedWith}) as share
+              WHERE (share->>'username')::text = ${username}
+              AND (share->>'accessLevel')::text = 'view'
+            )`,
+            and(
+              eq(healthRecords.isEmergencyAccessible, true),
+              sql`EXISTS (
+                SELECT 1 FROM users u
+                WHERE u.uuid = ${healthRecords.patientUuid}
+                AND EXISTS (
+                  SELECT 1 FROM jsonb_array_elements(u.emergency_contacts) as contact
+                  WHERE (contact->>'username')::text = ${username}
+                  AND (contact->>'canViewRecords')::boolean = true
+                )
+              )`
+            )
           )
         )
-      )
-      .orderBy(sql`${healthRecords.date} DESC`);
+        .orderBy(sql`${healthRecords.date} DESC`);
 
-    return records;
+      // Remove sensitive data before returning
+      return records.map(record => {
+        const { signature, ...safeRecord } = record;
+        return safeRecord;
+      });
+    } catch (error) {
+      console.error('Error in getSharedRecords:', error instanceof Error ? error.message : 'Unknown error');
+      throw error;
+    }
   }
 
   // Implement new document methods
