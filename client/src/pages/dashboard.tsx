@@ -685,6 +685,9 @@ export default function Dashboard() {
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Add New Health Record</DialogTitle>
+                    <DialogDescription>
+                      Create a new health record. Fill in all required fields to document your medical information.
+                    </DialogDescription>
                   </DialogHeader>
                   <NewRecordForm onSubmit={(data) => createRecord.mutate(data)} />
                 </DialogContent>
