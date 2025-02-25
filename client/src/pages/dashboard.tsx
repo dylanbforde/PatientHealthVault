@@ -145,6 +145,7 @@ export function ViewRecordDialog({ record }: { record: HealthRecord }) {
 
 // Updated NewRecordForm with proper validation and error handling
 function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
+  const { user } = useAuth();
   const form = useForm({
     resolver: zodResolver(
       insertHealthRecordSchema.extend({
@@ -176,6 +177,7 @@ function NewRecordForm({ onSubmit }: { onSubmit: (data: any) => void }) {
         onSubmit={form.handleSubmit((data) => {
           const formattedData = {
             ...data,
+            patientUuid: user?.uuid,  // Add the patient's UUID
             date: data.date instanceof Date ? data.date : new Date(data.date),
           };
           onSubmit(formattedData);
@@ -353,7 +355,16 @@ export default function Dashboard() {
 
   const createRecord = useMutation({
     mutationFn: async (data: any) => {
-      const res = await apiRequest("POST", "/api/health-records", data);
+      if (!user?.uuid) throw new Error("User not authenticated");
+
+      const recordData = {
+        ...data,
+        patientUuid: user.uuid,
+        status: "accepted", // Patient's own records are automatically accepted
+        sharedWith: [], // Initialize empty sharing
+      };
+
+      const res = await apiRequest("POST", "/api/health-records", recordData);
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.message || "Failed to create record");
