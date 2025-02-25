@@ -28,8 +28,20 @@ export const sharedAccessSchema = z.object({
 });
 
 // Custom schema for health records that properly handles date
+const healthRecordCategories = [
+  "General",
+  "Prescription",
+  "Lab Results",
+  "Imaging",
+  "Surgery",
+  "Vaccination",
+  "Chronic Condition",
+  "Emergency",
+] as const;
+
 const healthRecordSchema = z.object({
   patientUuid: z.string().uuid(), // Changed from userId to patientUuid
+  category: z.enum(healthRecordCategories).default("General"),
   title: z.string().min(1, "Title is required"),
   date: z.preprocess((arg) => {
     if (typeof arg === "string" || arg instanceof Date) return new Date(arg);

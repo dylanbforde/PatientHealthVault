@@ -17,7 +17,7 @@ export interface IStorage {
   updateUser(id: number, data: Partial<User>): Promise<User>;
   generateUniquePatientCode(): Promise<string>;
 
-  getHealthRecords(userId: number): Promise<HealthRecord[]>;
+  getHealthRecords(userId: number, search?: string, category?: string, startDate?: Date, endDate?: Date): Promise<HealthRecord[]>;
   getHealthRecord(id: number): Promise<HealthRecord | undefined>;
   createHealthRecord(record: InsertHealthRecord): Promise<HealthRecord>;
   updateHealthRecordSharing(id: number, sharedWith: any[]): Promise<HealthRecord>;
@@ -113,10 +113,14 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async getHealthRecords(userId: number): Promise<HealthRecord[]> {
+  async getHealthRecords(
+    userId: number, 
+    search?: string,
+    category?: string,
+    startDate?: Date,
+    endDate?: Date
+  ): Promise<HealthRecord[]> {
     console.log('Fetching health records for user:', userId);
-
-    // Get user info for debugging
     const [user] = await db
       .select()
       .from(users)

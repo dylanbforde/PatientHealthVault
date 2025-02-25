@@ -24,7 +24,14 @@ export function registerRoutes(app: Express): Server {
 
   app.get("/api/health-records", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    const records = await storage.getHealthRecords(req.user.id);
+    const { search, category, startDate, endDate } = req.query;
+    const records = await storage.getHealthRecords(
+      req.user.id,
+      search as string,
+      category as string,
+      startDate ? new Date(startDate as string) : undefined,
+      endDate ? new Date(endDate as string) : undefined
+    );
     res.json(records);
   });
 
