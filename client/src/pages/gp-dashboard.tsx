@@ -166,8 +166,9 @@ export default function GPDashboard() {
         title: "Success",
         description: "Document uploaded successfully",
       });
-      documentForm.reset();
+      documentForm.reset(); // Reset form
       setUploadProgress(0);
+      setSelectedTab("records"); // Switch back to records tab
     },
     onError: (error: Error) => {
       console.error('Document upload error:', error);
@@ -609,7 +610,7 @@ export default function GPDashboard() {
                           <FormField
                             control={documentForm.control}
                             name="content"
-                            render={({ field: { onChange, ...field } }) => (
+                            render={({ field: { onChange, value, ...field } }) => (
                               <FormItem>
                                 <FormLabel>Upload Document</FormLabel>
                                 <FormControl>
@@ -624,7 +625,7 @@ export default function GPDashboard() {
                                       }
                                     }}
                                     {...field}
-                                    value={undefined}
+                                    className="cursor-pointer"
                                     accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
                                   />
                                 </FormControl>

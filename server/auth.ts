@@ -6,7 +6,6 @@ import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
-import rateLimit from 'express-rate-limit';
 import helmet from "helmet";
 
 declare global {
@@ -39,13 +38,6 @@ export function setupAuth(app: Express) {
       crossOriginResourcePolicy: { policy: "cross-origin" }
     })
   );
-
-  // Rate limiting for auth endpoints
-  const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 5, // Limit each IP to 5 requests per windowMs
-    message: "Too many login attempts, please try again later"
-  });
 
   const sessionSettings: session.SessionOptions = {
     secret: process.env.REPL_ID!,
@@ -92,8 +84,8 @@ export function setupAuth(app: Express) {
     }
   });
 
-  // Apply rate limiting to auth endpoints
-  app.post("/api/register", authLimiter, async (req, res, next) => {
+  // Removed rate limiting from auth endpoints
+  app.post("/api/register", async (req, res, next) => {
     try {
       const existingUser = await storage.getUserByUsername(req.body.username);
       if (existingUser) {
@@ -116,7 +108,7 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/login", authLimiter, passport.authenticate("local"), (req, res) => {
+  app.post("/api/login", passport.authenticate("local"), (req, res) => {
     // Don't send sensitive data back
     const { password, ...safeUser } = req.user as SelectUser;
     res.status(200).json(safeUser);
