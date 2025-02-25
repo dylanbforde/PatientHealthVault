@@ -54,7 +54,7 @@ import { EmergencyContactsForm } from "@/components/emergency-contacts-form";
 import { SharedRecordsView } from "@/components/shared-records-view";
 import { NavBar } from "@/components/nav-bar";
 import { RecordSharingForm } from "@/components/record-sharing-form";
-import { RecordSearch } from "@/components/record-search";
+import RecordSearch from "@/components/record-search";
 
 
 export function ViewRecordDialog({ record }: { record: HealthRecord }) {

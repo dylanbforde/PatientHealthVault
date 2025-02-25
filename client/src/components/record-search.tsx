@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
@@ -25,7 +26,7 @@ interface RecordSearchProps {
   onSearch: (params: Record<string, string | undefined>) => void;
 }
 
-export function RecordSearch({ onSearch }: RecordSearchProps) {
+function RecordSearch({ onSearch }: RecordSearchProps) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
 
@@ -61,3 +62,5 @@ export function RecordSearch({ onSearch }: RecordSearchProps) {
     </form>
   );
 }
+
+export default RecordSearch;
