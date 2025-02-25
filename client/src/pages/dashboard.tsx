@@ -312,12 +312,11 @@ export default function Dashboard() {
   const [selectedRecord, setSelectedRecord] = useState<HealthRecord | null>(null);
   const [searchParams, setSearchParams] = useState<Record<string, string>>({});
   const [selectedPatient, setSelectedPatient] = useState<any | null>(null); 
-  const { data: records = [], isLoading, refetch } = useQuery<HealthRecord[]>({
+  const { data: records, isLoading, refetch } = useQuery<HealthRecord[]>({
     queryKey: ["/api/health-records", searchParams],
     queryFn: async () => {
       const params = new URLSearchParams(searchParams);
-      const response = await apiRequest("GET", `/api/health-records?${params.toString()}`);
-      return Array.isArray(response) ? response : [];
+      return apiRequest("GET", `/api/health-records?${params.toString()}`);
     },
   });
 
