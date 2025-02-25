@@ -13,8 +13,8 @@ app.use(cors({
 
 // Add headers to allow iframe embedding in Replit
 app.use((req, res, next) => {
-  res.header('X-Frame-Options', 'ALLOW-FROM replit.com');
-  res.header('Content-Security-Policy', "frame-ancestors 'self' *.replit.com *.replit.dev");
+  res.header('X-Frame-Options', 'ALLOW-FROM https://replit.com');
+  res.header('Content-Security-Policy', "frame-ancestors 'self' https://*.replit.com https://*.replit.dev");
   next();
 });
 
