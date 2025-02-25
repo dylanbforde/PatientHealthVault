@@ -309,8 +309,9 @@ export default function Dashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [selectedRecord, setSelectedRecord] = useState<HealthRecord | null>(null);
-  const { data: records, isLoading } = useQuery<HealthRecord[]>({
-    queryKey: ["/api/health-records"],
+  const [searchParams, setSearchParams] = useState({}); // Added searchParams state
+  const { data: records, isLoading, refetch } = useQuery<HealthRecord[]>({ // Added refetch
+    queryKey: ["/api/health-records", searchParams], // Added searchParams to queryKey
   });
 
   const createRecord = useMutation({
@@ -332,7 +333,7 @@ export default function Dashboard() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/health-records"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/health-records", searchParams] }); // Added searchParams to queryKey
       toast({
         title: "Record created",
         description: "Your health record has been created successfully.",
@@ -364,7 +365,7 @@ export default function Dashboard() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/health-records"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/health-records", searchParams] }); // Added searchParams to queryKey
     },
   });
 
@@ -614,6 +615,11 @@ export default function Dashboard() {
               </Dialog>
             </CardHeader>
             <CardContent>
+              {/* Placeholder for RecordSearch component */}
+              <RecordSearch onSearch={(params) => {
+                setSearchParams(params);
+                refetch();
+              }} />
               <Tabs defaultValue="table">
                 <TabsList className="mb-4">
                   <TabsTrigger value="table">Table View</TabsTrigger>
