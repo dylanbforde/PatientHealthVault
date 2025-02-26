@@ -355,6 +355,7 @@ export default function Dashboard() {
     refetch();
   };
 
+  // Move createRecord mutation inside the component to access context
   const createRecord = useMutation({
     mutationFn: async (data: any) => {
       logger.info("Creating record mutation started", { data });
@@ -368,7 +369,7 @@ export default function Dashboard() {
         const recordData = {
           patientUuid: user.uuid,
           title: data.title,
-          date: new Date(data.date),
+          date: data.date instanceof Date ? data.date : new Date(data.date),
           recordType: data.recordType,
           content: {
             notes: data.content.notes,
